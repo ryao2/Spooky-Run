@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 select-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spooky Selina Run - Global Edition</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        pixel: ['"Press Start 2P"', 'cursive'],
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; touch-action: manipulation; }
+        .font-pixel { font-family: 'Press Start 2P', cursive; }
+        canvas { image-rendering: pixelated; }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col justify-between bg-slate-950 text-slate-100 overflow-x-hidden">
+
+    <!-- Top Bar Navigation / HUD -->
+    <header class="w-full max-w-5xl mx-auto p-4 flex justify-between items-center z-20">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500 flex items-center justify-center overflow-hidden">
+                <img src="logo.png" alt="Logo" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <span class="hidden text-xl">🤠</span>
+            </div>
+            <div>
+                <h1 class="font-pixel text-sm sm:text-base text-purple-400 leading-none">SPOOKY SELINA RUN</h1>
+                <span class="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Global Online Edition
+                </span>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <!-- Audio Toggle Button -->
+            <button id="audio-toggle-btn" onclick="toggleAudio()" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-800 transition flex items-center gap-2 text-xs font-semibold">
+                <i id="audio-icon" class="fa-solid fa-volume-high text-purple-400"></i>
+                <span class="hidden sm:inline">Sound</span>
+            </button>
+
+            <!-- Leaderboard Toggle Button -->
+            <button onclick="openLeaderboard()" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-purple-400 rounded-xl border border-slate-800 transition flex items-center gap-2 text-xs font-semibold">
+                <i class="fa-solid fa-earth-americas"></i>
+                <span class="hidden sm:inline">Global Scores</span>
+            </button>
+
+            <!-- Admin Modal Toggle Button -->
+            <button onclick="openAdminModal()" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-rose-400 rounded-xl border border-slate-800 transition flex items-center gap-2 text-xs font-semibold">
+                <i class="fa-solid fa-user-shield"></i>
+                <span class="hidden sm:inline">Admin</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Game Container -->
+    <main class="w-full max-w-5xl mx-auto px-4 my-auto flex flex-col items-center justify-center relative">
+        
+        <!-- Game Area Frame -->
+        <div id="game-frame" class="relative w-full aspect-[2/1] sm:aspect-[2.4/1] max-h-[540px] bg-slate-900 border-2 border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
+            
+            <!-- Canvas Engine -->
+            <canvas id="gameCanvas" class="w-full h-full block cursor-pointer"></canvas>
+
+            <!-- Active User Display HUD & Logout Button -->
+            <div id="player-hud-tag" class="hidden absolute top-4 left-4 glass-panel px-3 py-1.5 rounded-lg border border-slate-700/50 flex items-center gap-3 z-20">
+                <div class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-user text-purple-400 text-xs"></i>
+                    <span id="hud-username" class="font-pixel text-[10px] text-slate-200">PLAYER</span>
+                </div>
+                <button onclick="handleLogout()" class="px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/40 text-rose-300 rounded font-pixel text-[8px] transition">
+                    LOGOUT
+                </button>
+            </div>
+
+            <!-- Start / Name & Password Entry Overlay -->
+            <div id="start-screen" class="absolute inset-0 glass-panel z-30 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                <div class="w-24 h-24 max-h-24 sm:w-28 sm:h-28 flex items-center justify-center">
+                    <img src="logo.png" alt="Game Logo" class="max-w-full max-h-full object-contain animate-bounce" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div class="hidden text-5xl animate-bounce">🤠</div>
+                </div>
+
+                <h2 class="font-pixel text-lg sm:text-xl text-purple-400">SPOOKY SELINA RUN</h2>
+                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter your username to submit scores to the public global leaderboard!</p>
+
+                <form onsubmit="handleStartGame(event)" class="w-full max-w-xs space-y-2.5">
+                    <input type="text" id="username-input" maxlength="12" placeholder="USERNAME" required 
+                        class="w-full px-4 py-2 bg-slate-950 border border-slate-700 focus:border-purple-400 rounded-xl font-pixel text-center text-xs text-purple-300 outline-none uppercase transition">
+                    
+                    <input type="password" id="password-input" maxlength="16" placeholder="PASSWORD (OPTIONAL)" 
+                        class="w-full px-4 py-2 bg-slate-950 border border-slate-700 focus:border-purple-400 rounded-xl font-pixel text-center text-xs text-purple-300 outline-none transition">
+
+                    <button type="submit" class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-slate-100 font-pixel font-bold text-xs rounded-xl shadow-lg transition active:scale-95">
+                        START RUN
+                    </button>
+                </form>
+            </div>
+
+            <!-- GAME OVER OVERLAY -->
+            <div id="gameover-screen" class="hidden absolute inset-0 z-30 flex items-center justify-center p-2 bg-slate-950/80 backdrop-blur-md">
+                <div class="w-full h-full max-w-2xl bg-slate-900/90 border-2 border-purple-500/70 rounded-xl p-3 flex flex-col items-center justify-between shadow-2xl overflow-hidden">
+                    
+                    <div class="text-sm sm:text-base text-rose-500 font-pixel animate-pulse">GAME OVER</div>
+                    
+                    <div class="w-full flex-1 min-h-0 bg-slate-950 border border-purple-500/30 rounded-lg p-1 my-2 flex items-center justify-center overflow-hidden">
+                        <img id="death-poster-img" src="poster.png" alt="Death Poster" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div class="hidden text-6xl">🤠</div>
+                    </div>
+
+                    <div class="flex items-center justify-center gap-3 w-full max-w-md text-xs font-pixel">
+                        <div class="px-3 py-1 bg-slate-950 rounded-lg border border-slate-800">
+                            <span class="text-slate-500 text-[8px] mr-1">SCORE:</span>
+                            <span id="final-score" class="text-purple-400 text-xs">0</span>
+                        </div>
+                        <div class="px-3 py-1 bg-slate-950 rounded-lg border border-slate-800">
+                            <span class="text-slate-500 text-[8px] mr-1">BEST:</span>
+                            <span id="final-high-score" class="text-emerald-400 text-xs">0</span>
+                        </div>
+                        <button onclick="restartGame()" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-slate-100 font-pixel font-bold text-xs rounded-lg shadow-lg transition active:scale-95">
+                            RETRY
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Mobile Touch Controls -->
+        <div class="w-full grid grid-cols-2 gap-3 mt-4 sm:hidden">
+            <button id="touch-duck-btn" class="py-4 bg-slate-900 active:bg-slate-800 border border-slate-800 rounded-xl text-center font-pixel text-xs text-slate-300 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-arrow-down"></i> DUCK / FAST FALL
+            </button>
+            <button id="touch-jump-btn" class="py-4 bg-purple-600 active:bg-purple-500 text-slate-100 rounded-xl text-center font-pixel text-xs font-bold flex items-center justify-center gap-2 shadow-lg">
+                <i class="fa-solid fa-arrow-up"></i> JUMP / DOUBLE JUMP
+            </button>
+        </div>
+
+        <!-- Desktop Controls -->
+        <div class="hidden sm:flex items-center justify-between w-full mt-3 px-2 text-slate-500 text-xs font-medium">
+            <span><strong class="text-slate-400 font-pixel text-[10px]">SPACE / UP / W:</strong> Jump (Tap mid-air for Double Jump)</span>
+            <span><strong class="text-slate-400 font-pixel text-[10px]">DOWN / S:</strong> Crouch / Fast Fall</span>
+            <span><strong class="text-slate-400 font-pixel text-[10px]">MAX SPEED:</strong> Capped at 14.0</span>
+        </div>
+    </main>
+
+    <!-- Global Leaderboard Modal -->
+    <div id="leaderboard-modal" class="hidden fixed inset-0 glass-panel z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-earth-americas text-purple-400 text-lg animate-spin" style="animation-duration: 12s;"></i>
+                    <h3 class="font-pixel text-sm text-purple-400">GLOBAL LEADERBOARD</h3>
+                </div>
+                <button onclick="closeLeaderboard()" class="text-slate-400 hover:text-slate-100 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="leaderboard-list">
+                <div class="text-center py-8 text-slate-500 font-pixel text-xs flex flex-col items-center gap-2">
+                    <i class="fa-solid fa-circle-notch animate-spin text-purple-400 text-base"></i>
+                    Fetching live global scores...
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center border-t border-slate-800 pt-3 text-xs">
+                <button onclick="fetchGlobalLeaderboard()" class="text-purple-400 hover:text-purple-300 font-pixel text-[9px] flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrows-rotate"></i> REFRESH
+                </button>
+                <button onclick="closeLeaderboard()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-pixel text-[10px] rounded-lg">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Console Modal -->
+    <div id="admin-modal" class="hidden fixed inset-0 glass-panel z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-user-shield text-rose-400 text-lg"></i>
+                    <h3 class="font-pixel text-sm text-rose-400">ADMIN CONSOLE</h3>
+                </div>
+                <button onclick="closeAdminModal()" class="text-slate-400 hover:text-slate-100 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="admin-auth-panel" class="space-y-3">
+                <p class="text-xs text-slate-400">Enter administrator security password to access control panel:</p>
+                <form onsubmit="handleAdminLogin(event)" class="space-y-3">
+                    <input type="password" id="admin-pass-input" placeholder="ADMIN PASSWORD" required class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 focus:border-rose-400 rounded-xl font-pixel text-center text-xs text-rose-300 outline-none">
+                    <button type="submit" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-pixel text-xs rounded-xl shadow-lg transition">LOG IN</button>
+                </form>
+            </div>
+            <div id="admin-controls-panel" class="hidden space-y-4">
+                <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-center">
+                    <span class="text-emerald-400 font-pixel text-[10px]"><i class="fa-solid fa-check-circle"></i> ADMIN AUTHENTICATED</span>
+                </div>
+                <div class="space-y-2">
+                    <h4 class="font-pixel text-[10px] text-slate-400">GLOBAL PLAYER MANAGEMENT</h4>
+                    <div id="admin-player-list" class="max-h-40 overflow-y-auto space-y-1.5 pr-1"></div>
+                </div>
+                <div class="border-t border-slate-800 pt-3 flex flex-col gap-2">
+                    <button onclick="clearLeaderboard()" class="w-full py-2.5 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/40 font-pixel text-[10px] rounded-xl transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-trash-can"></i> RESET GLOBAL LEADERBOARD
+                    </button>
+                </div>
+            </div>
+            <div class="flex justify-end border-t border-slate-800 pt-3">
+                <button onclick="closeLeaderboard()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-pixel text-[10px] rounded-lg">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="w-full text-center py-3 text-[11px] text-slate-600 font-medium">
+        Use WASD / Arrow Keys / Touch Controls to Play
+    </footer>
+
+    <!-- GAME ENGINE CODE -->
+    <script>
+        /* ==========================================================================
+           GLOBAL CLOUD BACKEND CREDENTIALS
+           ========================================================================== */
+        const JSONBIN_BIN_ID = "6ad5b08aac6210605a3dcd36";
+        const JSONBIN_API_KEY = "$2a$10$LlSUNPh6G6VazqYVfUF2nutarV7niI6.wwu97QsIxyq0/YyFRkjgC";
+
+        const dinoRun1 = new Image(); dinoRun1.src = 'run1.png';
+        const dinoRun2 = new Image(); dinoRun2.src = 'run2.png';
+        const dinoJump = new Image(); dinoJump.src = 'jump.png';
+        const cactusImg = new Image(); cactusImg.src = 'cactus.png';
+        const pteroImg = new Image(); pteroImg.src = 'pterodactyl.png';
+        const logoImg = new Image(); logoImg.src = 'logo.png';
+        const posterImg = new Image(); posterImg.src = 'poster.png';
+
+        let soundEnabled = true;
+        const bgAudio = new Audio('audio');
+        bgAudio.loop = true;
+        bgAudio.preload = 'auto';
+
+        function startBackgroundMusic() {
+            if (!soundEnabled) return;
+            bgAudio.play().catch(() => {
+                const altAudio = new Audio('audio.mp3');
+                altAudio.loop = true;
+                altAudio.play().catch(() => {});
+            });
+        }
+
+        function toggleAudio() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('audio-icon');
+            icon.className = soundEnabled ? 'fa-solid fa-volume-high text-purple-400' : 'fa-solid fa-volume-xmark text-slate-600';
+            if (soundEnabled) bgAudio.play().catch(() => {});
+            else bgAudio.pause();
+        }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const V_WIDTH = 800;
+        const V_HEIGHT = 300;
+        const GROUND_Y = 240;
+
+        let gameState = 'START';
+        let currentUsername = "PLAYER";
+        let score = 0;
+        let gameSpeed = 7.5;
+        let distanceRun = 0;
+        let dayNightFactor = 0;
+        let isNight = false;
+        let isAdminLoggedIn = false;
+
+        const DOUBLE_JUMP_COOLDOWN_MS = 5000;
+        let lastDoubleJumpTime = 0;
+
+        const dino = {
+            x: 60,
+            y: GROUND_Y - 44,
+            width: 44,
+            height: 44,
+            vy: 0,
+            gravity: 1.2,
+            jumpForce: -15.5,
+            isJumping: false,
+            hasDoubleJumped: false,
+            isDucking: false,
+            animFrame: 0,
+            animTimer: 0
+        };
+
+        let obstacles = [];
+        let particles = [];
+        let clouds = [];
+        let stars = [];
+
+        window.onload = () => {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            initStars();
+            initClouds();
+            setupControls();
+            fetchGlobalLeaderboard();
+            requestAnimationFrame(gameLoop);
+        };
+
+        function resizeCanvas() {
+            canvas.width = V_WIDTH;
+            canvas.height = V_HEIGHT;
+        }
+
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < 15; i++) {
+                stars.push({
+                    x: Math.random() * V_WIDTH,
+                    y: Math.random() * (GROUND_Y - 80),
+                    size: Math.random() * 2 + 1,
+                    alpha: Math.random()
+                });
+            }
+        }
+
+        function initClouds() {
+            clouds = [];
+            for (let i = 0; i < 3; i++) {
+                clouds.push({
+                    x: Math.random() * V_WIDTH,
+                    y: 30 + Math.random() * 60,
+                    width: 50 + Math.random() * 30,
+                    speed: 0.5 + Math.random() * 0.5
+                });
+            }
+        }
+
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                if (e.target && e.target.tagName === 'INPUT') return;
+
+                if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                    e.preventDefault();
+                    if (gameState === 'PLAYING') triggerJump();
+                    else if (gameState === 'GAMEOVER') restartGame();
+                }
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                    e.preventDefault();
+                    if (gameState === 'PLAYING') {
+                        dino.isDucking = true;
+                        if (dino.isJumping) dino.vy += 6.5;
+                    }
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.target && e.target.tagName === 'INPUT') return;
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') dino.isDucking = false;
+            });
+
+            const jumpBtn = document.getElementById('touch-jump-btn');
+            const duckBtn = document.getElementById('touch-duck-btn');
+
+            jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameState === 'PLAYING') triggerJump(); });
+            duckBtn.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); 
+                if (gameState === 'PLAYING') {
+                    dino.isDucking = true; 
+                    if (dino.isJumping) dino.vy += 6.5; 
+                } 
+            });
+            duckBtn.addEventListener('touchend', (e) => { e.preventDefault(); dino.isDucking = false; });
+
+            canvas.addEventListener('mousedown', () => {
+                if (gameState === 'PLAYING') triggerJump();
+            });
+        }
+
+        function triggerJump() {
+            const now = Date.now();
+            if (!dino.isJumping) {
+                dino.vy = dino.jumpForce;
+                dino.isJumping = true;
+                dino.hasDoubleJumped = false;
+                spawnDustParticles(dino.x + 10, GROUND_Y);
+            } else if (!dino.hasDoubleJumped && (now - lastDoubleJumpTime >= DOUBLE_JUMP_COOLDOWN_MS)) {
+                dino.vy = dino.jumpForce * 0.95;
+                dino.hasDoubleJumped = true;
+                lastDoubleJumpTime = now;
+                spawnDoubleJumpSmokePuff(dino.x + (dino.width / 2), dino.y + dino.height);
+            }
+        }
+
+        function handleStartGame(e) {
+            e.preventDefault();
+            const usernameInput = document.getElementById('username-input');
+            const passwordInput = document.getElementById('password-input');
+            
+            const name = usernameInput.value.trim().toUpperCase() || "PLAYER";
+            const pass = passwordInput.value.trim();
+
+            if (name === 'ADMIN') {
+                openAdminModal();
+                return;
+            }
+
+            currentUsername = name;
+            document.getElementById('hud-username').innerText = currentUsername;
+            document.getElementById('player-hud-tag').classList.remove('hidden');
+            document.getElementById('start-screen').classList.add('hidden');
+
+            startBackgroundMusic();
+            startGame();
+        }
+
+        function handleLogout() {
+            gameState = 'START';
+            currentUsername = "PLAYER";
+            document.getElementById('player-hud-tag').classList.add('hidden');
+            document.getElementById('gameover-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+            document.getElementById('username-input').value = '';
+            document.getElementById('password-input').value = '';
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            score = 0;
+            gameSpeed = 7.5;
+            distanceRun = 0;
+            lastDoubleJumpTime = 0;
+            obstacles = [];
+            particles = [];
+            dino.y = GROUND_Y - 44;
+            dino.vy = 0;
+            dino.isJumping = false;
+            dino.hasDoubleJumped = false;
+            dino.isDucking = false;
+            dino.animTimer = 0;
+            dino.animFrame = 0;
+            document.getElementById('gameover-screen').classList.add('hidden');
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            distanceRun += gameSpeed * 0.1;
+            score = Math.floor(distanceRun);
+
+            isNight = Math.floor(score / 500) % 2 === 1;
+            if (isNight && dayNightFactor < 1) dayNightFactor += 0.01;
+            else if (!isNight && dayNightFactor > 0) dayNightFactor -= 0.01;
+
+            gameSpeed = Math.min(14.0, 7.5 + Math.log(1 + score / 200) * 1.8);
+
+            if (dino.isDucking) {
+                dino.height = 24;
+                if (!dino.isJumping) dino.y = GROUND_Y - 24;
+            } else {
+                dino.height = 44;
+            }
+
+            dino.vy += dino.gravity;
+            dino.y += dino.vy;
+
+            if (dino.y >= GROUND_Y - dino.height) {
+                dino.y = GROUND_Y - dino.height;
+                dino.vy = 0;
+                dino.isJumping = false;
+                dino.hasDoubleJumped = false;
+            }
+
+            dino.animTimer++;
+            if (dino.animTimer >= 8) {
+                dino.animTimer = 0;
+                dino.animFrame = (dino.animFrame === 0) ? 1 : 0;
+            }
+
+            if (!dino.isJumping && Math.random() < 0.2) {
+                spawnDustParticles(dino.x, GROUND_Y);
+            }
+
+            clouds.forEach(c => {
+                c.x -= c.speed;
+                if (c.x + c.width < 0) c.x = V_WIDTH + 50;
+            });
+
+            for (let idx = particles.length - 1; idx >= 0; idx--) {
+                const p = particles[idx];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= p.fadeSpeed || 0.04;
+                if (p.isSmoke) p.size += 0.3;
+                if (p.alpha <= 0) particles.splice(idx, 1);
+            }
+
+            const minSpawnDistance = Math.max(220, 250 + (gameSpeed * 8));
+            if (obstacles.length === 0 || V_WIDTH - obstacles[obstacles.length - 1].x > minSpawnDistance + Math.random() * 180) {
+                spawnObstacle();
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.x -= gameSpeed;
+
+                if (obs.type === 'pterodactyl' || obs.type === 'stacked-bats') {
+                    obs.animTimer++;
+                    if (obs.animTimer % 10 === 0) obs.animFrame = (obs.animFrame + 1) % 2;
+                }
+
+                const paddingX = 8;
+                const paddingY = 6;
+                if (
+                    dino.x + paddingX < obs.x + obs.width &&
+                    dino.x + dino.width - paddingX > obs.x &&
+                    dino.y + paddingY < obs.y + obs.height &&
+                    dino.y + dino.height - paddingY > obs.y
+                ) {
+                    triggerGameOver();
+                    break;
+                }
+
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+        }
+
+        function spawnObstacle() {
+            const rand = Math.random();
+
+            if (rand < 0.15 || score < 50) {
+                obstacles.push({ type: 'normal-cactus', x: V_WIDTH + 20, y: GROUND_Y - 36, width: 20, height: 36 });
+            } else if (rand < 0.30) {
+                obstacles.push({ type: 'big-cactus', x: V_WIDTH + 20, y: GROUND_Y - 54, width: 26, height: 54 });
+            } else if (rand < 0.45) {
+                obstacles.push({ type: 'double-cactus', x: V_WIDTH + 20, y: GROUND_Y - 38, width: 38, height: 38 });
+            } else if (rand < 0.60) {
+                obstacles.push({ type: 'stacked-cacti', x: V_WIDTH + 20, y: GROUND_Y - 60, width: 22, height: 60 });
+            } else if (rand < 0.75) {
+                obstacles.push({ type: 'pterodactyl', x: V_WIDTH + 20, y: GROUND_Y - 26, width: 36, height: 26, animFrame: 0, animTimer: 0 });
+            } else if (rand < 0.88) {
+                obstacles.push({ type: 'pterodactyl', x: V_WIDTH + 20, y: GROUND_Y - 65, width: 36, height: 26, animFrame: 0, animTimer: 0 });
+            } else {
+                obstacles.push({ type: 'stacked-bats', x: V_WIDTH + 20, y: GROUND_Y - 76, width: 38, height: 56, animFrame: 0, animTimer: 0 });
+            }
+        }
+
+        function spawnDustParticles(x, y) {
+            particles.push({
+                x: x, y: y - 2, vx: -gameSpeed * 0.3 + Math.random(), vy: -Math.random() * 0.8,
+                size: Math.random() * 3 + 2, alpha: 0.8, fadeSpeed: 0.04, isSmoke: false
+            });
+        }
+
+        function spawnDoubleJumpSmokePuff(x, y) {
+            for (let i = 0; i < 14; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 3 + 1;
+                particles.push({
+                    x: x + (Math.random() * 12 - 6), y: y,
+                    vx: Math.cos(angle) * speed - (gameSpeed * 0.2), vy: Math.sin(angle) * speed + 1,
+                    size: Math.random() * 6 + 4, alpha: 0.9, fadeSpeed: 0.03, isSmoke: true,
+                    color: `rgba(${180 + Math.floor(Math.random() * 40)}, ${180 + Math.floor(Math.random() * 40)}, 220, `
+                });
+            }
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('final-high-score').innerText = getUserPersonalBest(currentUsername);
+
+            const posterImgEl = document.getElementById('death-poster-img');
+            posterImgEl.src = 'poster.png?' + new Date().getTime();
+
+            saveScoreGlobal(currentUsername, score);
+
+            document.getElementById('gameover-screen').classList.remove('hidden');
+        }
+
+        function render() {
+            const bgR = Math.floor(15 * (1 - dayNightFactor) + 15 * dayNightFactor);
+            const bgG = Math.floor(23 * (1 - dayNightFactor) + 23 * dayNightFactor);
+            const bgB = Math.floor(42 * (1 - dayNightFactor) + 20 * dayNightFactor);
+            ctx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
+            ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
+
+            if (dayNightFactor > 0.1) {
+                stars.forEach(s => {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha * dayNightFactor})`;
+                    ctx.fillRect(s.x, s.y, s.size, s.size);
+                });
+            }
+
+            clouds.forEach(c => {
+                ctx.fillStyle = `rgba(100, 116, 139, ${0.4 * (1 - dayNightFactor * 0.5)})`;
+                ctx.fillRect(c.x, c.y, c.width, 10);
+                ctx.fillRect(c.x + 10, c.y - 6, c.width - 20, 6);
+            });
+
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, GROUND_Y);
+            ctx.lineTo(V_WIDTH, GROUND_Y);
+            ctx.stroke();
+
+            ctx.fillStyle = '#334155';
+            for (let i = 0; i < V_WIDTH; i += 40) {
+                const offsetX = (i - (distanceRun * 10) % 40 + V_WIDTH) % V_WIDTH;
+                ctx.fillRect(offsetX, GROUND_Y + 6, 12, 2);
+                ctx.fillRect((offsetX + 20) % V_WIDTH, GROUND_Y + 14, 6, 2);
+            }
+
+            particles.forEach(p => {
+                if (p.isSmoke) {
+                    ctx.fillStyle = p.color + `${p.alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = `rgba(148, 163, 184, ${p.alpha})`;
+                    ctx.fillRect(p.x, p.y, p.size, p.size);
+                }
+            });
+
+            obstacles.forEach(obs => {
+                if (obs.type === 'normal-cactus' || obs.type === 'big-cactus') {
+                    if (cactusImg.complete && cactusImg.naturalWidth !== 0) ctx.drawImage(cactusImg, obs.x, obs.y, obs.width, obs.height);
+                    else { ctx.font = `${obs.height}px sans-serif`; ctx.fillText('🤠', obs.x, obs.y + obs.height); }
+                } else if (obs.type === 'double-cactus') {
+                    if (cactusImg.complete && cactusImg.naturalWidth !== 0) {
+                        ctx.drawImage(cactusImg, obs.x, obs.y, 18, obs.height);
+                        ctx.drawImage(cactusImg, obs.x + 20, obs.y, 18, obs.height);
+                    } else { ctx.font = `${obs.height}px sans-serif`; ctx.fillText('🤠🤠', obs.x, obs.y + obs.height); }
+                } else if (obs.type === 'stacked-cacti') {
+                    if (cactusImg.complete && cactusImg.naturalWidth !== 0) {
+                        ctx.drawImage(cactusImg, obs.x, obs.y, obs.width, 30);
+                        ctx.drawImage(cactusImg, obs.x, obs.y + 30, obs.width, 30);
+                    } else { ctx.font = `30px sans-serif`; ctx.fillText('🤠', obs.x, obs.y + 30); ctx.fillText('🤠', obs.x, obs.y + 60); }
+                } else if (obs.type === 'pterodactyl') {
+                    if (pteroImg.complete && pteroImg.naturalWidth !== 0) ctx.drawImage(pteroImg, obs.x, obs.y, obs.width, obs.height);
+                    else { ctx.font = `${obs.height}px sans-serif`; ctx.fillText('🤠', obs.x, obs.y + obs.height); }
+                } else if (obs.type === 'stacked-bats') {
+                    if (pteroImg.complete && pteroImg.naturalWidth !== 0) {
+                        ctx.drawImage(pteroImg, obs.x, obs.y, obs.width, 26);
+                        ctx.drawImage(pteroImg, obs.x, obs.y + 28, obs.width, 26);
+                    } else { ctx.font = `26px sans-serif`; ctx.fillText('🤠', obs.x, obs.y + 26); ctx.fillText('🤠', obs.x, obs.y + 54); }
+                }
+            });
+
+            drawDino();
+
+            ctx.fillStyle = '#c084fc';
+            ctx.font = '12px "Press Start 2P"';
+            ctx.textAlign = 'right';
+            ctx.fillText(`SCORE ${score.toString().padStart(5, '0')}`, V_WIDTH - 20, 30);
+
+            renderCooldownGauge();
+        }
+
+        function drawDino() {
+            let activeSprite = dino.isJumping ? dinoJump : (dino.animFrame === 0 ? dinoRun1 : dinoRun2);
+
+            if (activeSprite.complete && activeSprite.naturalWidth !== 0) {
+                const aspect = activeSprite.naturalWidth / activeSprite.naturalHeight;
+                let drawWidth = dino.height * aspect;
+                let drawHeight = dino.height;
+                let drawX = dino.x + (dino.width - drawWidth) / 2;
+                let drawY = dino.y;
+                ctx.drawImage(activeSprite, drawX, drawY, drawWidth, drawHeight);
+            } else {
+                ctx.font = `${dino.height}px sans-serif`;
+                ctx.fillText('🤠', dino.x, dino.y + dino.height);
+            }
+        }
+
+        function renderCooldownGauge() {
+            const now = Date.now();
+            const elapsed = now - lastDoubleJumpTime;
+            const progress = Math.min(1.0, elapsed / DOUBLE_JUMP_COOLDOWN_MS);
+
+            const barX = V_WIDTH - 140;
+            const barY = 42;
+            const barWidth = 120;
+            const barHeight = 8;
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+            ctx.fillRect(barX - 2, barY - 2, barWidth + 4, barHeight + 4);
+
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+
+            if (progress >= 1.0) {
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+            } else {
+                ctx.fillStyle = '#a855f7';
+                ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+            }
+
+            ctx.fillStyle = progress >= 1.0 ? '#38bdf8' : '#94a3b8';
+            ctx.font = '7px "Press Start 2P"';
+            ctx.textAlign = 'right';
+            ctx.fillText(progress >= 1.0 ? '2X JUMP READY' : `2X COOLDOWN ${(5 - (elapsed / 1000)).toFixed(1)}s`, V_WIDTH - 20, 62);
+        }
+
+        /* CLOUD BACKEND FUNCTIONS */
+        let globalLeaderboardCache = [];
+
+        async function fetchGlobalLeaderboard() {
+            const listContainer = document.getElementById('leaderboard-list');
+
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                const json = await res.json();
+                globalLeaderboardCache = Array.isArray(json.record) ? json.record : [];
+                renderLeaderboardList(globalLeaderboardCache);
+            } catch (err) {
+                listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to sync online scores. Check your API key.</div>`;
+            }
+        }
+
+        async function saveScoreGlobal(name, scoreVal) {
+            let leaderboard = [...globalLeaderboardCache];
+            const existingIndex = leaderboard.findIndex(entry => entry.name === name);
+
+            if (existingIndex !== -1) {
+                if (scoreVal > leaderboard[existingIndex].score) {
+                    leaderboard[existingIndex].score = scoreVal;
+                    leaderboard[existingIndex].date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                } else {
+                    return;
+                }
+            } else {
+                leaderboard.push({
+                    name: name,
+                    score: scoreVal,
+                    date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                });
+            }
+
+            leaderboard.sort((a, b) => b.score - a.score);
+            globalLeaderboardCache = leaderboard;
+
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': JSONBIN_API_KEY
+                    },
+                    body: JSON.stringify(leaderboard)
+                });
+            } catch (e) {}
+        }
+
+        function getUserPersonalBest(name) {
+            const entry = globalLeaderboardCache.find(item => item.name === name);
+            return entry ? entry.score : score;
+        }
+
+        function renderLeaderboardList(leaderboard) {
+            const listContainer = document.getElementById('leaderboard-list');
+            listContainer.innerHTML = '';
+
+            if (!leaderboard || leaderboard.length === 0) {
+                listContainer.innerHTML = `<div class="text-center py-8 text-slate-500 font-pixel text-xs">No global high scores logged yet!</div>`;
+                return;
+            }
+
+            leaderboard.forEach((entry, idx) => {
+                const item = document.createElement('div');
+                item.className = `flex justify-between items-center p-3 rounded-xl border ${
+                    idx === 0 ? 'bg-purple-500/10 border-purple-500/40' : 'bg-slate-950 border-slate-800'
+                } font-pixel text-xs`;
+
+                item.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <span class="${idx === 0 ? 'text-purple-400 font-bold' : 'text-slate-500'} w-4">${idx + 1}.</span>
+                        <div>
+                            <span class="text-slate-200 block">${entry.name}</span>
+                            <span class="text-[9px] text-slate-500 font-sans font-medium">${entry.date}</span>
+                        </div>
+                    </div>
+                    <span class="text-purple-400 font-bold">${entry.score}</span>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        function openLeaderboard() {
+            document.getElementById('leaderboard-modal').classList.remove('hidden');
+            fetchGlobalLeaderboard();
+        }
+
+        function closeLeaderboard() {
+            document.getElementById('leaderboard-modal').classList.add('hidden');
+        }
+
+        const MASTER_ADMIN_PASS = "bingbong";
+
+        function openAdminModal() {
+            document.getElementById('admin-modal').classList.remove('hidden');
+            if (isAdminLoggedIn) {
+                document.getElementById('admin-auth-panel').classList.add('hidden');
+                document.getElementById('admin-controls-panel').classList.remove('hidden');
+                renderAdminPlayerList();
+            } else {
+                document.getElementById('admin-auth-panel').classList.remove('hidden');
+                document.getElementById('admin-controls-panel').classList.add('hidden');
+            }
+        }
+
+        function closeAdminModal() {
+            document.getElementById('admin-modal').classList.add('hidden');
+        }
+
+        function handleAdminLogin(e) {
+            e.preventDefault();
+            const input = document.getElementById('admin-pass-input');
+            if (input.value.trim() === MASTER_ADMIN_PASS) {
+                isAdminLoggedIn = true;
+                input.value = '';
+                document.getElementById('admin-auth-panel').classList.add('hidden');
+                document.getElementById('admin-controls-panel').classList.remove('hidden');
+                renderAdminPlayerList();
+            } else {
+                alert("Access Denied: Incorrect administrator password.");
+                input.value = '';
+            }
+        }
+
+        function renderAdminPlayerList() {
+            const container = document.getElementById('admin-player-list');
+            container.innerHTML = '';
+
+            if (globalLeaderboardCache.length === 0) {
+                container.innerHTML = `<div class="text-xs text-slate-500 text-center py-2">Global leaderboard is empty.</div>`;
+                return;
+            }
+
+            globalLeaderboardCache.forEach(item => {
+                const row = document.createElement('div');
+                row.className = "flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-800 text-xs font-pixel";
+                row.innerHTML = `
+                    <span class="text-slate-300">${item.name} (${item.score})</span>
+                    <button onclick="adminDeletePlayer('${item.name}')" class="text-rose-400 hover:text-rose-300 text-[10px] px-2 py-1 bg-rose-500/10 rounded">Delete</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        async function adminDeletePlayer(name) {
+            if (confirm(`Delete high score entry for ${name} globally?`)) {
+                let list = globalLeaderboardCache.filter(entry => entry.name !== name);
+                globalLeaderboardCache = list;
+                
+                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+                    body: JSON.stringify(list)
+                });
+
+                renderAdminPlayerList();
+                fetchGlobalLeaderboard();
+            }
+        }
+
+        async function clearLeaderboard() {
+            if (confirm("ADMIN WARNING: Are you sure you want to clear ALL global high scores?")) {
+                globalLeaderboardCache = [];
+                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+                    body: JSON.stringify([])
+                });
+                renderAdminPlayerList();
+                fetchGlobalLeaderboard();
+                alert("Global Leaderboard wiped successfully.");
+            }
+        }
+    </script>
+</body>
+</html>
