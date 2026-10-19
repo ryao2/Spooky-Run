@@ -1004,34 +1004,37 @@
             }
         }
 
-        async function clearLeaderboard() {
-            if (confirm("ADMIN WARNING: Are you sure you want to clear ALL global high scores?")) {
-                globalLeaderboardCache = [];
-                
-                try {
-                    const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-                        method: 'PUT',
-                        headers: { 
-                            'Content-Type': 'application/json', 
-                            'X-Master-Key': JSONBIN_API_KEY,
-                            'X-Bin-Versioning': 'false'
-                        },
-                        body: JSON.stringify([])
-                    });
+       async function clearLeaderboard() {
+    if (confirm("ADMIN WARNING: Are you sure you want to clear ALL global high scores?")) {
+        globalLeaderboardCache = [];
+        
+        try {
+            const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-Master-Key': JSONBIN_API_KEY,
+                    'X-Bin-Versioning': 'false'
+                },
+                body: JSON.stringify([]) // Safely serializes an empty array
+            });
 
-                    if (res.ok) {
-                        alert("Global Leaderboard wiped successfully.");
-                    } else {
-                        alert(`Reset failed (HTTP ${res.status}). Verify JSONBin Master Key.`);
-                    }
-                } catch (err) {
-                    alert("Network error while resetting leaderboard.");
-                }
-
-                renderAdminPlayerList();
-                fetchGlobalLeaderboard();
+            if (res.ok) {
+                alert("Global Leaderboard wiped successfully.");
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                console.error("JSONBin Reset Error:", res.status, errData);
+                alert(`Reset failed (HTTP ${res.status}): ${errData.message || 'Check request payload or Bin ID.'}`);
             }
+        } catch (err) {
+            console.error("Network error resetting leaderboard:", err);
+            alert("Network error while resetting leaderboard.");
         }
+
+        renderAdminPlayerList();
+        fetchGlobalLeaderboard();
+    }
+}
     </script>
 </body>
 </html>
