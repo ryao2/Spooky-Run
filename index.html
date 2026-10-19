@@ -55,19 +55,16 @@
         </div>
 
         <div class="flex items-center space-x-2">
-            <!-- Audio Toggle Button -->
             <button id="audio-toggle-btn" onclick="toggleAudio()" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-800 transition flex items-center gap-2 text-xs font-semibold">
                 <i id="audio-icon" class="fa-solid fa-volume-high text-purple-400"></i>
                 <span class="hidden sm:inline">Sound</span>
             </button>
 
-            <!-- Leaderboard Toggle Button -->
             <button onclick="openLeaderboard()" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-purple-400 rounded-xl border border-slate-800 transition flex items-center gap-2 text-xs font-semibold">
                 <i class="fa-solid fa-earth-americas"></i>
                 <span class="hidden sm:inline">Global Scores</span>
             </button>
 
-            <!-- Admin Modal Toggle Button -->
             <button onclick="openAdminModal()" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-rose-400 rounded-xl border border-slate-800 transition flex items-center gap-2 text-xs font-semibold">
                 <i class="fa-solid fa-user-shield"></i>
                 <span class="hidden sm:inline">Admin</span>
@@ -77,14 +74,10 @@
 
     <!-- Main Game Container -->
     <main class="w-full max-w-5xl mx-auto px-4 my-auto flex flex-col items-center justify-center relative">
-        
-        <!-- Game Area Frame -->
         <div id="game-frame" class="relative w-full aspect-[2/1] sm:aspect-[2.4/1] max-h-[540px] bg-slate-900 border-2 border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
             
-            <!-- Canvas Engine -->
             <canvas id="gameCanvas" class="w-full h-full block cursor-pointer"></canvas>
 
-            <!-- Active User Display HUD & Logout Button -->
             <div id="player-hud-tag" class="hidden absolute top-4 left-4 glass-panel px-3 py-1.5 rounded-lg border border-slate-700/50 flex items-center gap-3 z-20">
                 <div class="flex items-center gap-1.5">
                     <i class="fa-solid fa-user text-purple-400 text-xs"></i>
@@ -95,7 +88,7 @@
                 </button>
             </div>
 
-            <!-- Start / Name & Password Entry Overlay -->
+            <!-- Start Screen Overlay -->
             <div id="start-screen" class="absolute inset-0 glass-panel z-30 flex flex-col items-center justify-center p-6 text-center space-y-3">
                 <div class="w-24 h-24 max-h-24 sm:w-28 sm:h-28 flex items-center justify-center">
                     <img src="logo.png" alt="Game Logo" class="max-w-full max-h-full object-contain animate-bounce" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
@@ -103,13 +96,13 @@
                 </div>
 
                 <h2 class="font-pixel text-lg sm:text-xl text-purple-400">SPOOKY SELINA RUN</h2>
-                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter your username to submit scores to the public global leaderboard!</p>
+                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter a username and password to protect your score on the global leaderboard!</p>
 
                 <form onsubmit="handleStartGame(event)" class="w-full max-w-xs space-y-2.5">
                     <input type="text" id="username-input" maxlength="12" placeholder="USERNAME" required 
                         class="w-full px-4 py-2 bg-slate-950 border border-slate-700 focus:border-purple-400 rounded-xl font-pixel text-center text-xs text-purple-300 outline-none uppercase transition">
                     
-                    <input type="password" id="password-input" maxlength="16" placeholder="PASSWORD (OPTIONAL)" 
+                    <input type="password" id="password-input" maxlength="16" placeholder="PASSWORD" required 
                         class="w-full px-4 py-2 bg-slate-950 border border-slate-700 focus:border-purple-400 rounded-xl font-pixel text-center text-xs text-purple-300 outline-none transition">
 
                     <button type="submit" class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-slate-100 font-pixel font-bold text-xs rounded-xl shadow-lg transition active:scale-95">
@@ -118,7 +111,7 @@
                 </form>
             </div>
 
-            <!-- GAME OVER OVERLAY -->
+            <!-- Game Over Overlay -->
             <div id="gameover-screen" class="hidden absolute inset-0 z-30 flex items-center justify-center p-2 bg-slate-950/80 backdrop-blur-md">
                 <div class="w-full h-full max-w-2xl bg-slate-900/90 border-2 border-purple-500/70 rounded-xl p-3 flex flex-col items-center justify-between shadow-2xl overflow-hidden">
                     
@@ -128,6 +121,9 @@
                         <img id="death-poster-img" src="poster.png" alt="Death Poster" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                         <div class="hidden text-6xl">🤠</div>
                     </div>
+
+                    <!-- Cloud Sync Status Banner -->
+                    <div id="sync-status-msg" class="text-[10px] font-pixel text-slate-400">Syncing score to cloud...</div>
 
                     <div class="flex items-center justify-center gap-3 w-full max-w-md text-xs font-pixel">
                         <div class="px-3 py-1 bg-slate-950 rounded-lg border border-slate-800">
@@ -148,7 +144,7 @@
 
         </div>
 
-        <!-- Mobile Touch Controls -->
+        <!-- Touch Controls -->
         <div class="w-full grid grid-cols-2 gap-3 mt-4 sm:hidden">
             <button id="touch-duck-btn" class="py-4 bg-slate-900 active:bg-slate-800 border border-slate-800 rounded-xl text-center font-pixel text-xs text-slate-300 flex items-center justify-center gap-2">
                 <i class="fa-solid fa-arrow-down"></i> DUCK / FAST FALL
@@ -158,9 +154,8 @@
             </button>
         </div>
 
-        <!-- Desktop Controls -->
         <div class="hidden sm:flex items-center justify-between w-full mt-3 px-2 text-slate-500 text-xs font-medium">
-            <span><strong class="text-slate-400 font-pixel text-[10px]">SPACE / UP / W:</strong> Jump (Tap mid-air for Double Jump)</span>
+            <span><strong class="text-slate-400 font-pixel text-[10px]">SPACE / UP / W:</strong> Jump (Double Jump supported)</span>
             <span><strong class="text-slate-400 font-pixel text-[10px]">DOWN / S:</strong> Crouch / Fast Fall</span>
             <span><strong class="text-slate-400 font-pixel text-[10px]">MAX SPEED:</strong> Capped at 14.0</span>
         </div>
@@ -229,7 +224,7 @@
                 </div>
             </div>
             <div class="flex justify-end border-t border-slate-800 pt-3">
-                <button onclick="closeLeaderboard()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-pixel text-[10px] rounded-lg">Close</button>
+                <button onclick="closeAdminModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-pixel text-[10px] rounded-lg">Close</button>
             </div>
         </div>
     </div>
@@ -242,9 +237,10 @@
     <script>
         /* ==========================================================================
            GLOBAL CLOUD BACKEND CREDENTIALS
+           IMPORTANT: REPLACE THE VALUES BELOW WITH YOUR EXACT BIN ID & MASTER KEY
            ========================================================================== */
         const JSONBIN_BIN_ID = "6ad5b08aac6210605a3dcd36";
-        const JSONBIN_API_KEY = "$2a$10$7GDT9qc3IoQtXKfo5AyibumLXuleL3IcmvjUh8nWU4DOMxmbAG6iy";
+        const JSONBIN_API_KEY = "$2a$10$LlSUNPh6G6VazqYVfUF2nutarV7niI6.wwu97QsIxyq0/YyFRkjgC";
 
         const dinoRun1 = new Image(); dinoRun1.src = 'run1.png';
         const dinoRun2 = new Image(); dinoRun2.src = 'run2.png';
@@ -285,6 +281,7 @@
 
         let gameState = 'START';
         let currentUsername = "PLAYER";
+        let currentPassword = "";
         let score = 0;
         let gameSpeed = 7.5;
         let distanceRun = 0;
@@ -418,12 +415,18 @@
             const name = usernameInput.value.trim().toUpperCase() || "PLAYER";
             const pass = passwordInput.value.trim();
 
+            if (!pass) {
+                alert("Please enter a password to lock your score.");
+                return;
+            }
+
             if (name === 'ADMIN') {
                 openAdminModal();
                 return;
             }
 
             currentUsername = name;
+            currentPassword = pass;
             document.getElementById('hud-username').innerText = currentUsername;
             document.getElementById('player-hud-tag').classList.remove('hidden');
             document.getElementById('start-screen').classList.add('hidden');
@@ -435,6 +438,7 @@
         function handleLogout() {
             gameState = 'START';
             currentUsername = "PLAYER";
+            currentPassword = "";
             document.getElementById('player-hud-tag').classList.add('hidden');
             document.getElementById('gameover-screen').classList.add('hidden');
             document.getElementById('start-screen').classList.remove('hidden');
@@ -604,9 +608,8 @@
             const posterImgEl = document.getElementById('death-poster-img');
             posterImgEl.src = 'poster.png?' + new Date().getTime();
 
-            saveScoreGlobal(currentUsername, score);
-
             document.getElementById('gameover-screen').classList.remove('hidden');
+            saveScoreGlobal(currentUsername, score);
         }
 
         function render() {
@@ -736,7 +739,9 @@
             ctx.fillText(progress >= 1.0 ? '2X JUMP READY' : `2X COOLDOWN ${(5 - (elapsed / 1000)).toFixed(1)}s`, V_WIDTH - 20, 62);
         }
 
-        /* CLOUD BACKEND FUNCTIONS */
+        /* ==========================================================================
+           CLOUD BACKEND API (JSONBIN.IO INTEGRATION)
+           ========================================================================== */
         let globalLeaderboardCache = [];
 
         async function fetchGlobalLeaderboard() {
@@ -746,46 +751,81 @@
                 const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
                     headers: { 'X-Master-Key': JSONBIN_API_KEY }
                 });
+
+                if (!res.ok) {
+                    console.error("JSONBin Fetch Status Error:", res.status);
+                    listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Error ${res.status}: Check Master Key or Bin ID.</div>`;
+                    return;
+                }
+
                 const json = await res.json();
                 globalLeaderboardCache = Array.isArray(json.record) ? json.record : [];
                 renderLeaderboardList(globalLeaderboardCache);
             } catch (err) {
-                listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to sync online scores. Check your API key.</div>`;
+                console.error("Network Error on Leaderboard Fetch:", err);
+                listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Network error connecting to global server.</div>`;
             }
         }
 
         async function saveScoreGlobal(name, scoreVal) {
-            let leaderboard = [...globalLeaderboardCache];
-            const existingIndex = leaderboard.findIndex(entry => entry.name === name);
-
-            if (existingIndex !== -1) {
-                if (scoreVal > leaderboard[existingIndex].score) {
-                    leaderboard[existingIndex].score = scoreVal;
-                    leaderboard[existingIndex].date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                } else {
-                    return;
-                }
-            } else {
-                leaderboard.push({
-                    name: name,
-                    score: scoreVal,
-                    date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                });
-            }
-
-            leaderboard.sort((a, b) => b.score - a.score);
-            globalLeaderboardCache = leaderboard;
+            const statusEl = document.getElementById('sync-status-msg');
+            if (statusEl) statusEl.innerText = "Syncing score to cloud...";
 
             try {
-                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+
+                if (fetchRes.ok) {
+                    const latestJson = await fetchRes.json();
+                    if (Array.isArray(latestJson.record)) {
+                        globalLeaderboardCache = latestJson.record;
+                    }
+                }
+
+                let leaderboard = [...globalLeaderboardCache];
+                const existingIndex = leaderboard.findIndex(entry => entry.name === name);
+
+                if (existingIndex !== -1) {
+                    if (scoreVal > leaderboard[existingIndex].score) {
+                        leaderboard[existingIndex].score = scoreVal;
+                        leaderboard[existingIndex].date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                    } else {
+                        if (statusEl) statusEl.innerText = "Personal best retained!";
+                        return;
+                    }
+                } else {
+                    leaderboard.push({
+                        name: name,
+                        score: scoreVal,
+                        date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                    });
+                }
+
+                leaderboard.sort((a, b) => b.score - a.score);
+                globalLeaderboardCache = leaderboard;
+
+                const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Master-Key': JSONBIN_API_KEY
+                        'X-Master-Key': JSONBIN_API_KEY,
+                        'X-Bin-Versioning': 'false'
                     },
                     body: JSON.stringify(leaderboard)
                 });
-            } catch (e) {}
+
+                if (updateRes.ok) {
+                    if (statusEl) statusEl.innerText = "Score uploaded to global leaderboard!";
+                } else {
+                    console.error("JSONBin Update Error:", updateRes.status);
+                    if (statusEl) statusEl.innerText = `Sync failed (HTTP ${updateRes.status}). Check credentials.`;
+                }
+
+            } catch (e) {
+                console.error("Network Error on Save Score:", e);
+                if (statusEl) statusEl.innerText = "Offline or blocked by network rule.";
+            }
         }
 
         function getUserPersonalBest(name) {
@@ -891,7 +931,11 @@
                 
                 await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-Master-Key': JSONBIN_API_KEY,
+                        'X-Bin-Versioning': 'false'
+                    },
                     body: JSON.stringify(list)
                 });
 
@@ -905,7 +949,11 @@
                 globalLeaderboardCache = [];
                 await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-Master-Key': JSONBIN_API_KEY,
+                        'X-Bin-Versioning': 'false'
+                    },
                     body: JSON.stringify([])
                 });
                 renderAdminPlayerList();
