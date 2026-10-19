@@ -980,43 +980,64 @@
             });
         }
 
-        async function adminDeletePlayer(name) {
-            if (confirm(`Delete high score entry for ${name} globally?`)) {
-                let list = globalLeaderboardCache.filter(entry => entry.name !== name);
-                globalLeaderboardCache = list;
-                
-                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        'X-Master-Key': JSONBIN_API_KEY,
-                        'X-Bin-Versioning': 'false'
-                    },
-                    body: JSON.stringify(list)
-                });
+       sync function adminDeletePlayer(name) {
+    if (confirm(`Delete high score entry for ${name} globally?`)) {
+        let list = globalLeaderboardCache.filter(entry => entry.name !== name);
+        globalLeaderboardCache = list;
+        
+        try {
+            const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-Master-Key': JSONBIN_API_KEY,
+                    'X-Bin-Versioning': 'false'
+                },
+                body: JSON.stringify(list)
+            });
 
-                renderAdminPlayerList();
-                fetchGlobalLeaderboard();
+            if (res.ok) {
+                alert(`Deleted ${name} from global leaderboard.`);
+            } else {
+                alert(`Delete failed (HTTP ${res.status}). Check API key permissions.`);
             }
+        } catch (err) {
+            alert("Network error while deleting player.");
         }
 
-        async function clearLeaderboard() {
-            if (confirm("ADMIN WARNING: Are you sure you want to clear ALL global high scores?")) {
-                globalLeaderboardCache = [];
-                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        'X-Master-Key': JSONBIN_API_KEY,
-                        'X-Bin-Versioning': 'false'
-                    },
-                    body: JSON.stringify([])
-                });
-                renderAdminPlayerList();
-                fetchGlobalLeaderboard();
+        renderAdminPlayerList();
+        fetchGlobalLeaderboard();
+    }
+}
+
+async function clearLeaderboard() {
+    if (confirm("ADMIN WARNING: Are you sure you want to clear ALL global high scores?")) {
+        globalLeaderboardCache = [];
+        
+        try {
+            const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-Master-Key': JSONBIN_API_KEY,
+                    'X-Bin-Versioning': 'false'
+                },
+                body: JSON.stringify([])
+            });
+
+            if (res.ok) {
                 alert("Global Leaderboard wiped successfully.");
+            } else {
+                alert(`Reset failed (HTTP ${res.status}). Verify JSONBin Master Key.`);
             }
+        } catch (err) {
+            alert("Network error while resetting leaderboard.");
         }
+
+        renderAdminPlayerList();
+        fetchGlobalLeaderboard();
+    }
+}
     </script>
 </body>
 </html>
