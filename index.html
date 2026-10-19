@@ -249,7 +249,7 @@
            VERCEL SERVERLESS PROXY CONFIGURATION
            ========================================================================== */
         // REPLACE THIS URL WITH YOUR ACTUAL VERCEL DEPLOYMENT DOMAIN:
-        const VERCEL_AUTH_URL = "spooky-run.vercel.app"
+        const VERCEL_AUTH_URL = "spooky-run.vercel.app/api/admin-auth"
 ";
 
         /* ==========================================================================
@@ -316,7 +316,7 @@
 
         let soundEnabled = true;
         let hasPlayedInitialAudio = false;
-        const bgAudio = new Audio('audio');
+        const bgAudio = new Audio('audio.mp3'); 
         bgAudio.loop = true;
         bgAudio.preload = 'auto';
 
@@ -828,27 +828,26 @@
         let globalLeaderboardCache = [];
 
         async function fetchGlobalLeaderboard() {
-            const listContainer = document.getElementById('leaderboard-list');
+    const listContainer = document.getElementById('leaderboard-list');
+    try {
+        const res = await fetch(VERCEL_AUTH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'FETCH_ALL' })
+        });
 
-            try {
-                const res = await fetch(VERCEL_AUTH_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'FETCH_ALL' })
-                });
-
-                if (!res.ok) {
-                    listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Error ${res.status}: Unable to load scores.</div>`;
-                    return;
-                }
-
-                const json = await res.json();
-                globalLeaderboardCache = Array.isArray(json.leaderboard) ? json.leaderboard : [];
-                renderLeaderboardList(globalLeaderboardCache);
-            } catch (err) {
-                listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Network error connecting to global server.</div>`;
-            }
+        if (!res.ok) {
+            if (listContainer) listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Error ${res.status}: Unable to load scores.</div>`;
+            return;
         }
+
+        const json = await res.json();
+        globalLeaderboardCache = Array.isArray(json.leaderboard) ? json.leaderboard : [];
+        renderLeaderboardList(globalLeaderboardCache);
+    } catch (err) {
+        if (listContainer) listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Network error connecting to global server.</div>`;
+    }
+}
 
         async function saveScoreGlobal(name, scoreVal) {
             const statusEl = document.getElementById('sync-status-msg');
