@@ -194,7 +194,7 @@
 
     <!-- Admin Console Modal -->
     <div id="admin-modal" class="hidden fixed inset-0 glass-panel z-50 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-user-shield text-rose-400 text-lg"></i>
@@ -204,6 +204,7 @@
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
+
             <div id="admin-auth-panel" class="space-y-3">
                 <p class="text-xs text-slate-400">Enter administrator security password to access control panel:</p>
                 <form onsubmit="handleAdminLogin(event)" class="space-y-3">
@@ -211,20 +212,27 @@
                     <button type="submit" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-pixel text-xs rounded-xl shadow-lg transition">LOG IN</button>
                 </form>
             </div>
+
             <div id="admin-controls-panel" class="hidden space-y-4">
-                <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-center">
+                <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between">
                     <span class="text-emerald-400 font-pixel text-[10px]"><i class="fa-solid fa-check-circle"></i> ADMIN AUTHENTICATED</span>
+                    <button onclick="handleAdminLogout()" class="px-2.5 py-1 bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 border border-rose-500/40 rounded font-pixel text-[9px] transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-right-from-bracket"></i> LOGOUT ADMIN
+                    </button>
                 </div>
+
                 <div class="space-y-2">
                     <h4 class="font-pixel text-[10px] text-slate-400">GLOBAL PLAYER MANAGEMENT</h4>
-                    <div id="admin-player-list" class="max-h-40 overflow-y-auto space-y-1.5 pr-1"></div>
+                    <div id="admin-player-list" class="max-h-60 overflow-y-auto space-y-2 pr-1"></div>
                 </div>
-                <div class="border-t border-slate-800 pt-3 flex flex-col gap-2">
+
+                <div class="border-t border-slate-800 pt-3">
                     <button onclick="clearLeaderboard()" class="w-full py-2.5 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/40 font-pixel text-[10px] rounded-xl transition flex items-center justify-center gap-2">
                         <i class="fa-solid fa-trash-can"></i> RESET GLOBAL LEADERBOARD
                     </button>
                 </div>
             </div>
+
             <div class="flex justify-end border-t border-slate-800 pt-3">
                 <button onclick="closeAdminModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-pixel text-[10px] rounded-lg">Close</button>
             </div>
@@ -238,14 +246,64 @@
     <!-- GAME ENGINE & BACKEND SCRIPT -->
     <script>
         /* ==========================================================================
-           GLOBAL CLOUD BACKEND CREDENTIALS
-           PASTE YOUR ACTUAL JSONBIN BIN ID & RESTRICTED ACCESS KEY BELOW
+           VERCEL SERVERLESS PROXY CONFIGURATION
            ========================================================================== */
-        
         const JSONBIN_BIN_ID = "6ad5b08aac6210605a3dcd36";
-        
-        // PASTE YOUR RESTRICTED ACCESS KEY HERE (Starts with "$2a$10$" or "$2b$10$"):
-        const JSONBIN_ACCESS_KEY = "$2a$10$7GDT9qc3IoQtXKfo5AyibumLXuleL3IcmvjUh8nWU4DOMxmbAG6iy";
+        const VERCEL_AUTH_URL = "/api/admin-auth"; // Serverless proxy handles admin verification & JSONBin keys
+
+        /* ==========================================================================
+           CLIENT AES ENCRYPTION / DECRYPTION HELPERS
+           ========================================================================== */
+        async function deriveAdminKey(adminPass) {
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", enc.encode(adminPass), "PBKDF2", false, ["deriveKey"]
+            );
+            return crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: enc.encode("SpookySelinaSalt2026"),
+                    iterations: 100000,
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        async function encryptPassword(plainText, adminPass) {
+            const key = await deriveAdminKey(adminPass);
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const enc = new TextEncoder();
+            const ciphertext = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                key,
+                enc.encode(plainText)
+            );
+            const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+            const cipherHex = Array.from(new Uint8Array(ciphertext)).map(b => b.toString(16).padStart(2, '0')).join('');
+            return `${ivHex}:${cipherHex}`;
+        }
+
+        async function decryptPassword(encryptedStr, adminPass) {
+            try {
+                if (!encryptedStr || !encryptedStr.includes(':')) return encryptedStr;
+                const [ivHex, cipherHex] = encryptedStr.split(':');
+                const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const cipherBuffer = new Uint8Array(cipherHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const key = await deriveAdminKey(adminPass);
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: iv },
+                    key,
+                    cipherBuffer
+                );
+                return new TextDecoder().decode(decrypted);
+            } catch (e) {
+                return "[ENCRYPTED]";
+            }
+        }
 
         const dinoRun1 = new Image(); dinoRun1.src = 'run1.png';
         const dinoRun2 = new Image(); dinoRun2.src = 'run2.png';
@@ -299,6 +357,7 @@
         let dayNightFactor = 0;
         let isNight = false;
         let isAdminLoggedIn = false;
+        let currentAdminPass = "";
 
         const DOUBLE_JUMP_COOLDOWN_MS = 5000;
         let lastDoubleJumpTime = 0;
@@ -424,9 +483,9 @@
             const passwordInput = document.getElementById('password-input');
             
             const name = usernameInput.value.trim().toUpperCase();
-            const pass = passwordInput.value.trim();
+            const rawPass = passwordInput.value.trim();
 
-            if (!name || !pass) {
+            if (!name || !rawPass) {
                 alert("Both Username and Password are required!");
                 return;
             }
@@ -436,32 +495,18 @@
                 return;
             }
 
-            try {
-                const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-                    headers: { 'X-Access-Key': JSONBIN_ACCESS_KEY }
-                });
-
-                if (fetchRes.ok) {
-                    const latestJson = await fetchRes.json();
-                    if (Array.isArray(latestJson.record)) {
-                        globalLeaderboardCache = latestJson.record;
-                    }
-                }
-            } catch (err) {
-                console.error("Cloud password check error:", err);
-            }
-
             const existingPlayer = globalLeaderboardCache.find(entry => (entry.name || entry.username) === name);
 
             if (existingPlayer) {
-                if (existingPlayer.password && existingPlayer.password !== pass) {
+                const decryptedStoredPass = await decryptPassword(existingPlayer.password, "bingbing");
+                if (decryptedStoredPass && decryptedStoredPass !== rawPass) {
                     alert(`Username "${name}" is claimed! Enter the correct password or choose a different username.`);
                     return;
                 }
             }
 
             currentUsername = name;
-            currentPassword = pass;
+            currentPassword = await encryptPassword(rawPass, "bingbing");
 
             document.getElementById('hud-username').innerText = currentUsername;
             document.getElementById('player-hud-tag').classList.remove('hidden');
@@ -777,7 +822,7 @@
         }
 
         /* ==========================================================================
-           CLOUD BACKEND API (JSONBIN.IO INTEGRATION WITH RESTRICTED ACCESS KEY)
+           CLOUD BACKEND API (PUBLIC FETCH)
            ========================================================================== */
         let globalLeaderboardCache = [];
 
@@ -785,13 +830,10 @@
             const listContainer = document.getElementById('leaderboard-list');
 
             try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-                    headers: { 'X-Access-Key': JSONBIN_ACCESS_KEY }
-                });
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`);
 
                 if (!res.ok) {
-                    console.error("JSONBin Fetch Status Error:", res.status);
-                    listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Error ${res.status}: Check Access Key or Bin ID.</div>`;
+                    listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Error ${res.status}: Unable to load scores.</div>`;
                     return;
                 }
 
@@ -799,7 +841,6 @@
                 globalLeaderboardCache = Array.isArray(json.record) ? json.record : [];
                 renderLeaderboardList(globalLeaderboardCache);
             } catch (err) {
-                console.error("Network Error on Leaderboard Fetch:", err);
                 listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Network error connecting to global server.</div>`;
             }
         }
@@ -809,65 +850,23 @@
             if (statusEl) statusEl.innerText = "Syncing score to cloud...";
 
             try {
-                const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-                    headers: { 'X-Access-Key': JSONBIN_ACCESS_KEY }
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'SUBMIT_SCORE',
+                        payload: { playerName: name, score: scoreVal, password: currentPassword }
+                    })
                 });
 
-                if (fetchRes.ok) {
-                    const latestJson = await fetchRes.json();
-                    if (Array.isArray(latestJson.record)) {
-                        globalLeaderboardCache = latestJson.record;
-                    }
-                }
-
-                let leaderboard = [...globalLeaderboardCache];
-                const existingIndex = leaderboard.findIndex(entry => (entry.name || entry.username) === name);
-
-                if (existingIndex !== -1) {
-                    if (leaderboard[existingIndex].password && leaderboard[existingIndex].password !== currentPassword) {
-                        if (statusEl) statusEl.innerText = "Authentication error: Password mismatch!";
-                        return;
-                    }
-
-                    if (scoreVal > (leaderboard[existingIndex].score || 0)) {
-                        leaderboard[existingIndex].score = scoreVal;
-                        leaderboard[existingIndex].name = name;
-                        leaderboard[existingIndex].date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                    } else {
-                        if (statusEl) statusEl.innerText = "Personal best retained!";
-                        return;
-                    }
-                } else {
-                    leaderboard.push({
-                        name: name,
-                        password: currentPassword,
-                        score: scoreVal,
-                        date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                    });
-                }
-
-                leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0));
-                globalLeaderboardCache = leaderboard;
-
-                const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Access-Key': JSONBIN_ACCESS_KEY,
-                        'X-Bin-Versioning': 'false'
-                    },
-                    body: JSON.stringify(leaderboard)
-                });
-
-                if (updateRes.ok) {
+                if (res.ok) {
                     if (statusEl) statusEl.innerText = "Score uploaded to global leaderboard!";
+                    fetchGlobalLeaderboard();
                 } else {
-                    console.error("JSONBin Update Error:", updateRes.status);
-                    if (statusEl) statusEl.innerText = `Sync failed (HTTP ${updateRes.status}). Check credentials.`;
+                    if (statusEl) statusEl.innerText = `Sync failed. Verify server response.`;
                 }
 
             } catch (e) {
-                console.error("Network Error on Save Score:", e);
                 if (statusEl) statusEl.innerText = "Offline or blocked by network rule.";
             }
         }
@@ -919,8 +918,9 @@
             document.getElementById('leaderboard-modal').classList.add('hidden');
         }
 
-        const MASTER_ADMIN_PASS = "bingbong";
-
+        /* ==========================================================================
+           ADMIN CONSOLE CONTROLS & MANAGEMENT (SECURED VIA SERVERLESS)
+           ========================================================================== */
         function openAdminModal() {
             document.getElementById('admin-modal').classList.remove('hidden');
             if (isAdminLoggedIn) {
@@ -937,100 +937,207 @@
             document.getElementById('admin-modal').classList.add('hidden');
         }
 
-        function handleAdminLogin(e) {
+        async function handleAdminLogin(e) {
             e.preventDefault();
             const input = document.getElementById('admin-pass-input');
-            if (input.value.trim() === MASTER_ADMIN_PASS) {
-                isAdminLoggedIn = true;
-                input.value = '';
-                document.getElementById('admin-auth-panel').classList.add('hidden');
-                document.getElementById('admin-controls-panel').classList.remove('hidden');
-                renderAdminPlayerList();
-            } else {
-                alert("Access Denied: Incorrect administrator password.");
+            const typedPass = input.value.trim();
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adminPassword: typedPass,
+                        action: 'FETCH_ALL'
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    isAdminLoggedIn = true;
+                    currentAdminPass = typedPass;
+                    globalLeaderboardCache = data.leaderboard;
+                    input.value = '';
+
+                    document.getElementById('admin-auth-panel').classList.add('hidden');
+                    document.getElementById('admin-controls-panel').classList.remove('hidden');
+                    await renderAdminPlayerList();
+                } else {
+                    alert("Access Denied: Incorrect administrator password.");
+                    input.value = '';
+                }
+            } catch (err) {
+                alert("Network error communicating with authentication proxy.");
                 input.value = '';
             }
         }
 
-        function renderAdminPlayerList() {
+        function handleAdminLogout() {
+            isAdminLoggedIn = false;
+            currentAdminPass = "";
+            document.getElementById('admin-controls-panel').classList.add('hidden');
+            document.getElementById('admin-auth-panel').classList.remove('hidden');
+        }
+
+        async function renderAdminPlayerList() {
             const container = document.getElementById('admin-player-list');
-            container.innerHTML = '';
+            container.innerHTML = `<div class="text-xs text-slate-500 text-center py-2 font-pixel">Decrypting passwords...</div>`;
 
             if (globalLeaderboardCache.length === 0) {
-                container.innerHTML = `<div class="text-xs text-slate-500 text-center py-2">Global leaderboard is empty.</div>`;
+                container.innerHTML = `<div class="text-xs text-slate-500 text-center py-2 font-pixel">Global leaderboard is empty.</div>`;
                 return;
             }
 
-            globalLeaderboardCache.forEach(item => {
+            container.innerHTML = '';
+
+            for (const item of globalLeaderboardCache) {
                 const playerName = item.name || item.username || "ANONYMOUS";
                 const playerScore = item.score || 0;
+                
+                const plainPassword = await decryptPassword(item.password, currentAdminPass);
 
                 const row = document.createElement('div');
-                row.className = "flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-800 text-xs font-pixel";
+                row.className = "p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex flex-col gap-2";
                 row.innerHTML = `
-                    <span class="text-slate-300">${playerName} (${playerScore})</span>
-                    <button onclick="adminDeletePlayer('${playerName}')" class="text-rose-400 hover:text-rose-300 text-[10px] px-2 py-1 bg-rose-500/10 rounded">Delete</button>
+                    <div class="flex justify-between items-center text-xs font-pixel">
+                        <div>
+                            <span class="text-slate-200 block">${playerName}</span>
+                            <span class="text-[9px] text-purple-400 font-sans">Pass: <strong class="text-emerald-400">${plainPassword}</strong> | Score: <strong class="text-purple-300">${playerScore}</strong></span>
+                        </div>
+                        <button onclick="adminDeletePlayer('${playerName}')" class="text-rose-400 hover:text-rose-300 text-[9px] px-2 py-1 bg-rose-500/10 rounded font-pixel">Delete</button>
+                    </div>
+                    <div class="flex gap-1.5 mt-1">
+                        <input type="number" id="edit-score-${playerName}" placeholder="New Score" value="${playerScore}" class="w-24 px-2 py-1 bg-slate-900 border border-slate-800 rounded font-pixel text-[9px] text-purple-300 outline-none">
+                        <button onclick="adminUpdatePlayerScore('${playerName}')" class="px-2 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 rounded font-pixel text-[8px]">SET SCORE</button>
+                        
+                        <input type="text" id="reset-pass-${playerName}" placeholder="New Pass" class="flex-1 px-2 py-1 bg-slate-900 border border-slate-800 rounded font-pixel text-[9px] text-purple-300 outline-none">
+                        <button onclick="adminResetPlayerPassword('${playerName}')" class="px-2 py-1 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 rounded font-pixel text-[8px]">SET PASS</button>
+                    </div>
                 `;
                 container.appendChild(row);
-            });
+            }
+        }
+
+        async function adminUpdatePlayerScore(playerName) {
+            const inputEl = document.getElementById(`edit-score-${playerName}`);
+            const newScoreVal = inputEl ? parseInt(inputEl.value, 10) : NaN;
+
+            if (isNaN(newScoreVal) || newScoreVal < 0) {
+                alert("Please enter a valid numeric score!");
+                return;
+            }
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adminPassword: currentAdminPass,
+                        action: 'UPDATE_SCORE',
+                        payload: { playerName, newScore: newScoreVal }
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`Score for ${playerName} updated to ${newScoreVal}!`);
+                    globalLeaderboardCache = data.leaderboard;
+                    renderAdminPlayerList();
+                    fetchGlobalLeaderboard();
+                } else {
+                    alert("Failed to update score via proxy.");
+                }
+            } catch (err) {
+                alert("Network error updating score.");
+            }
+        }
+
+        async function adminResetPlayerPassword(playerName) {
+            const inputEl = document.getElementById(`reset-pass-${playerName}`);
+            const newPlainPass = inputEl ? inputEl.value.trim() : "";
+
+            if (!newPlainPass) {
+                alert("Please enter a new password first!");
+                return;
+            }
+
+            const encryptedNewPass = await encryptPassword(newPlainPass, "bingbing");
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adminPassword: currentAdminPass,
+                        action: 'RESET_PASS',
+                        payload: { playerName, newPassword: encryptedNewPass }
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`Password for ${playerName} updated successfully to "${newPlainPass}"!`);
+                    globalLeaderboardCache = data.leaderboard;
+                    renderAdminPlayerList();
+                } else {
+                    alert("Failed to reset password.");
+                }
+            } catch (err) {
+                alert("Network error resetting password.");
+            }
         }
 
         async function adminDeletePlayer(name) {
             if (confirm(`Delete high score entry for ${name} globally?`)) {
-                let list = globalLeaderboardCache.filter(entry => (entry.name || entry.username) !== name);
-                globalLeaderboardCache = list;
-                
                 try {
-                    const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-                        method: 'PUT',
-                        headers: { 
-                            'Content-Type': 'application/json', 
-                            'X-Access-Key': JSONBIN_ACCESS_KEY,
-                            'X-Bin-Versioning': 'false'
-                        },
-                        body: JSON.stringify(list)
+                    const res = await fetch(VERCEL_AUTH_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            adminPassword: currentAdminPass,
+                            action: 'DELETE_PLAYER',
+                            payload: { playerName: name }
+                        })
                     });
 
                     if (res.ok) {
+                        const data = await res.json();
                         alert(`Deleted ${name} from global leaderboard.`);
+                        globalLeaderboardCache = data.leaderboard;
+                        renderAdminPlayerList();
+                        fetchGlobalLeaderboard();
                     } else {
-                        alert(`Delete failed (HTTP ${res.status}). Check Access Key permissions.`);
+                        alert("Delete failed.");
                     }
                 } catch (err) {
                     alert("Network error while deleting player.");
                 }
-
-                renderAdminPlayerList();
-                fetchGlobalLeaderboard();
             }
         }
 
         async function clearLeaderboard() {
             if (confirm("ADMIN WARNING: Are you sure you want to clear ALL global high scores?")) {
-                globalLeaderboardCache = [];
-                
                 try {
-                    const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-                        method: 'PUT',
-                        headers: { 
-                            'Content-Type': 'application/json', 
-                            'X-Access-Key': JSONBIN_ACCESS_KEY,
-                            'X-Bin-Versioning': 'false'
-                        },
-                        body: JSON.stringify([])
+                    const res = await fetch(VERCEL_AUTH_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            adminPassword: currentAdminPass,
+                            action: 'CLEAR_ALL'
+                        })
                     });
 
                     if (res.ok) {
                         alert("Global Leaderboard wiped successfully.");
+                        globalLeaderboardCache = [];
+                        renderAdminPlayerList();
+                        fetchGlobalLeaderboard();
                     } else {
-                        alert(`Reset failed (HTTP ${res.status}). Verify JSONBin Access Key permissions.`);
+                        alert("Reset failed.");
                     }
                 } catch (err) {
-                    alert("Network error while resetting leaderboard.");
+                    alert("Network error resetting leaderboard.");
                 }
-
-                renderAdminPlayerList();
-                fetchGlobalLeaderboard();
             }
         }
     </script>
