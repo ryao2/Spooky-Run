@@ -243,10 +243,7 @@
            PASTE YOUR ACTUAL JSONBIN BIN ID & MASTER KEY BELOW
            ========================================================================== */
         
-        // 1. YOUR 24-CHARACTER BIN ID:
-        const JSONBIN_BIN_ID = "6ad5b9b0ac6210605a3de228";
-
-        // 2. YOUR MASTER API KEY (Starts with "$2a$10$"):
+        const JSONBIN_BIN_ID = "6ad5b08aac6210605a3dcd36";
         const JSONBIN_API_KEY = "$2a$10$LlSUNPh6G6VazqYVfUF2nutarV7niI6.wwu97QsIxyq0/YyFRkjgC";
 
         const dinoRun1 = new Image(); dinoRun1.src = 'run1.png';
@@ -258,16 +255,22 @@
         const posterImg = new Image(); posterImg.src = 'poster.png';
 
         let soundEnabled = true;
+        let hasPlayedInitialAudio = false;
         const bgAudio = new Audio('audio');
-        bgAudio.loop = true;
+        bgAudio.loop = true; // Loops audio continuously
         bgAudio.preload = 'auto';
 
         function startBackgroundMusic() {
-            if (!soundEnabled) return;
-            bgAudio.play().catch(() => {
+            if (!soundEnabled || hasPlayedInitialAudio) return;
+
+            bgAudio.play().then(() => {
+                hasPlayedInitialAudio = true;
+            }).catch(() => {
                 const altAudio = new Audio('audio.mp3');
                 altAudio.loop = true;
-                altAudio.play().catch(() => {});
+                altAudio.play().then(() => {
+                    hasPlayedInitialAudio = true;
+                }).catch(() => {});
             });
         }
 
@@ -275,8 +278,8 @@
             soundEnabled = !soundEnabled;
             const icon = document.getElementById('audio-icon');
             icon.className = soundEnabled ? 'fa-solid fa-volume-high text-purple-400' : 'fa-solid fa-volume-xmark text-slate-600';
-            if (soundEnabled) bgAudio.play().catch(() => {});
-            else bgAudio.pause();
+            if (soundEnabled && !hasPlayedInitialAudio) startBackgroundMusic();
+            else if (!soundEnabled) bgAudio.pause();
         }
 
         const canvas = document.getElementById('gameCanvas');
@@ -447,7 +450,7 @@
                 console.error("Cloud password check error:", err);
             }
 
-            const existingPlayer = globalLeaderboardCache.find(entry => entry.name === name);
+            const existingPlayer = globalLeaderboardCache.find(entry => (entry.name || entry.username) === name);
 
             if (existingPlayer) {
                 if (existingPlayer.password && existingPlayer.password !== pass) {
@@ -817,7 +820,7 @@
                 }
 
                 let leaderboard = [...globalLeaderboardCache];
-                const existingIndex = leaderboard.findIndex(entry => entry.name === name);
+                const existingIndex = leaderboard.findIndex(entry => (entry.name || entry.username) === name);
 
                 if (existingIndex !== -1) {
                     if (leaderboard[existingIndex].password && leaderboard[existingIndex].password !== currentPassword) {
@@ -825,8 +828,9 @@
                         return;
                     }
 
-                    if (scoreVal > leaderboard[existingIndex].score) {
+                    if (scoreVal > (leaderboard[existingIndex].score || 0)) {
                         leaderboard[existingIndex].score = scoreVal;
+                        leaderboard[existingIndex].name = name;
                         leaderboard[existingIndex].date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                     } else {
                         if (statusEl) statusEl.innerText = "Personal best retained!";
@@ -841,7 +845,7 @@
                     });
                 }
 
-                leaderboard.sort((a, b) => b.score - a.score);
+                leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0));
                 globalLeaderboardCache = leaderboard;
 
                 const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
@@ -868,8 +872,8 @@
         }
 
         function getUserPersonalBest(name) {
-            const entry = globalLeaderboardCache.find(item => item.name === name);
-            return entry ? entry.score : score;
+            const entry = globalLeaderboardCache.find(item => (item.name || item.username) === name);
+            return entry ? (entry.score || 0) : score;
         }
 
         function renderLeaderboardList(leaderboard) {
@@ -882,6 +886,10 @@
             }
 
             leaderboard.forEach((entry, idx) => {
+                const playerName = entry.name || entry.username || "ANONYMOUS";
+                const playerScore = typeof entry.score === 'number' ? entry.score : (parseInt(entry.score, 10) || 0);
+                const playerDate = entry.date || "Recent";
+
                 const item = document.createElement('div');
                 item.className = `flex justify-between items-center p-3 rounded-xl border ${
                     idx === 0 ? 'bg-purple-500/10 border-purple-500/40' : 'bg-slate-950 border-slate-800'
@@ -891,11 +899,11 @@
                     <div class="flex items-center space-x-3">
                         <span class="${idx === 0 ? 'text-purple-400 font-bold' : 'text-slate-500'} w-4">${idx + 1}.</span>
                         <div>
-                            <span class="text-slate-200 block">${entry.name}</span>
-                            <span class="text-[9px] text-slate-500 font-sans font-medium">${entry.date}</span>
+                            <span class="text-slate-200 block">${playerName}</span>
+                            <span class="text-[9px] text-slate-500 font-sans font-medium">${playerDate}</span>
                         </div>
                     </div>
-                    <span class="text-purple-400 font-bold">${entry.score}</span>
+                    <span class="text-purple-400 font-bold">${playerScore}</span>
                 `;
                 listContainer.appendChild(item);
             });
@@ -953,11 +961,14 @@
             }
 
             globalLeaderboardCache.forEach(item => {
+                const playerName = item.name || item.username || "ANONYMOUS";
+                const playerScore = item.score || 0;
+
                 const row = document.createElement('div');
                 row.className = "flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-800 text-xs font-pixel";
                 row.innerHTML = `
-                    <span class="text-slate-300">${item.name} (${item.score})</span>
-                    <button onclick="adminDeletePlayer('${item.name}')" class="text-rose-400 hover:text-rose-300 text-[10px] px-2 py-1 bg-rose-500/10 rounded">Delete</button>
+                    <span class="text-slate-300">${playerName} (${playerScore})</span>
+                    <button onclick="adminDeletePlayer('${playerName}')" class="text-rose-400 hover:text-rose-300 text-[10px] px-2 py-1 bg-rose-500/10 rounded">Delete</button>
                 `;
                 container.appendChild(row);
             });
@@ -965,7 +976,7 @@
 
         async function adminDeletePlayer(name) {
             if (confirm(`Delete high score entry for ${name} globally?`)) {
-                let list = globalLeaderboardCache.filter(entry => entry.name !== name);
+                let list = globalLeaderboardCache.filter(entry => (entry.name || entry.username) !== name);
                 globalLeaderboardCache = list;
                 
                 try {
