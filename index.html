@@ -248,8 +248,9 @@
         /* ==========================================================================
            VERCEL SERVERLESS PROXY CONFIGURATION
            ========================================================================== */
-        const JSONBIN_BIN_ID = "6ad5b08aac6210605a3dcd36";
-        const VERCEL_AUTH_URL = "/api/admin-auth"; // Serverless proxy handles admin verification & JSONBin keys
+        // REPLACE THIS URL WITH YOUR ACTUAL VERCEL DEPLOYMENT DOMAIN:
+        const VERCEL_AUTH_URL = "spooky-run.vercel.app"
+";
 
         /* ==========================================================================
            CLIENT AES ENCRYPTION / DECRYPTION HELPERS
@@ -822,7 +823,7 @@
         }
 
         /* ==========================================================================
-           CLOUD BACKEND API (PUBLIC FETCH)
+           CLOUD BACKEND API (PROXY FETCHING)
            ========================================================================== */
         let globalLeaderboardCache = [];
 
@@ -830,7 +831,11 @@
             const listContainer = document.getElementById('leaderboard-list');
 
             try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`);
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'FETCH_ALL' })
+                });
 
                 if (!res.ok) {
                     listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Error ${res.status}: Unable to load scores.</div>`;
@@ -838,7 +843,7 @@
                 }
 
                 const json = await res.json();
-                globalLeaderboardCache = Array.isArray(json.record) ? json.record : [];
+                globalLeaderboardCache = Array.isArray(json.leaderboard) ? json.leaderboard : [];
                 renderLeaderboardList(globalLeaderboardCache);
             } catch (err) {
                 listContainer.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Network error connecting to global server.</div>`;
@@ -863,7 +868,7 @@
                     if (statusEl) statusEl.innerText = "Score uploaded to global leaderboard!";
                     fetchGlobalLeaderboard();
                 } else {
-                    if (statusEl) statusEl.innerText = `Sync failed. Verify server response.`;
+                    if (statusEl) statusEl.innerText = `Sync failed. Check proxy.`;
                 }
 
             } catch (e) {
