@@ -531,7 +531,7 @@
         function startGame() {
             gameState = 'PLAYING';
             score = 0;
-            gameSpeed = 7.5;
+            gameSpeed = 8.5;
             distanceRun = 0;
             lastDoubleJumpTime = 0;
             obstacles = [];
@@ -559,7 +559,7 @@
         function update() {
             if (gameState !== 'PLAYING') return;
 
-            distanceRun += gameSpeed * 0.1;
+            distanceRun += gameSpeed * 0.2;
             score = Math.floor(distanceRun);
 
             isNight = Math.floor(score / 500) % 2 === 1;
