@@ -96,7 +96,7 @@
                 </div>
 
                 <h2 class="font-pixel text-lg sm:text-xl text-purple-400">SPOOKY SELINA RUN</h2>
-                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter a username and password to protect your score on the global leaderboard!</p>
+                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter a username and password to lock your account on the global leaderboard!</p>
 
                 <form onsubmit="handleStartGame(event)" class="w-full max-w-xs space-y-2.5">
                     <input type="text" id="username-input" maxlength="12" placeholder="USERNAME" required 
@@ -125,7 +125,7 @@
                     <!-- Cloud Sync Status Banner -->
                     <div id="sync-status-msg" class="text-[10px] font-pixel text-slate-400">Syncing score to cloud...</div>
 
-                    <div class="flex items-center justify-center gap-3 w-full max-w-md text-xs font-pixel">
+                    <div class="flex items-center justify-center gap-2 sm:gap-3 w-full max-w-md text-xs font-pixel">
                         <div class="px-3 py-1 bg-slate-950 rounded-lg border border-slate-800">
                             <span class="text-slate-500 text-[8px] mr-1">SCORE:</span>
                             <span id="final-score" class="text-purple-400 text-xs">0</span>
@@ -134,8 +134,12 @@
                             <span class="text-slate-500 text-[8px] mr-1">BEST:</span>
                             <span id="final-high-score" class="text-emerald-400 text-xs">0</span>
                         </div>
-                        <button onclick="restartGame()" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-slate-100 font-pixel font-bold text-xs rounded-lg shadow-lg transition active:scale-95">
+                        <button onclick="restartGame()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-slate-100 font-pixel font-bold text-xs rounded-lg shadow-lg transition active:scale-95">
                             RETRY
+                        </button>
+                        <!-- LOGOUT BUTTON ON DEATH SCREEN -->
+                        <button onclick="handleLogout()" class="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/40 text-rose-300 font-pixel font-bold text-xs rounded-lg shadow-lg transition active:scale-95">
+                            LOGOUT
                         </button>
                     </div>
 
@@ -233,13 +237,23 @@
         Use WASD / Arrow Keys / Touch Controls to Play
     </footer>
 
-    <!-- GAME ENGINE CODE -->
+    <!-- GAME ENGINE & BACKEND SCRIPT -->
     <script>
         /* ==========================================================================
            GLOBAL CLOUD BACKEND CREDENTIALS
-           IMPORTANT: REPLACE THE VALUES BELOW WITH YOUR EXACT BIN ID & MASTER KEY
+           --------------------------------------------------------------------------
+           1. JSONBIN_BIN_ID: Paste your 24-character Bin ID below. 
+              This single bin holds the entire leaderboard array. Each player record 
+              inside the array contains: { name, password, score, date }.
+           
+           2. JSONBIN_API_KEY: Paste your JSONBin Master API Key below.
+              Master keys start with "$2a$10$" and grant read/write access.
            ========================================================================== */
+        
+        // PASTE YOUR HIGH SCORES & PASSWORD BIN ID HERE (24 characters, e.g. "65d1f2e8abc123456789def0"):
         const JSONBIN_BIN_ID = "6ad5b08aac6210605a3dcd36";
+
+        // PASTE YOUR MASTER API KEY HERE (Starts with "$2a$10$"):
         const JSONBIN_API_KEY = "$2a$10$LlSUNPh6G6VazqYVfUF2nutarV7niI6.wwu97QsIxyq0/YyFRkjgC";
 
         const dinoRun1 = new Image(); dinoRun1.src = 'run1.png';
@@ -407,16 +421,19 @@
             }
         }
 
-        function handleStartGame(e) {
+        /* ==========================================================================
+           PASSWORD & USERNAME AUTHENTICATION AT GAME START
+           ========================================================================== */
+        async function handleStartGame(e) {
             e.preventDefault();
             const usernameInput = document.getElementById('username-input');
             const passwordInput = document.getElementById('password-input');
             
-            const name = usernameInput.value.trim().toUpperCase() || "PLAYER";
+            const name = usernameInput.value.trim().toUpperCase();
             const pass = passwordInput.value.trim();
 
-            if (!pass) {
-                alert("Please enter a password to lock your score.");
+            if (!name || !pass) {
+                alert("Both Username and Password are required to protect your score!");
                 return;
             }
 
@@ -425,8 +442,36 @@
                 return;
             }
 
+            // 1. Fetch latest live cloud data to check if username exists
+            try {
+                const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+
+                if (fetchRes.ok) {
+                    const latestJson = await fetchRes.json();
+                    if (Array.isArray(latestJson.record)) {
+                        globalLeaderboardCache = latestJson.record;
+                    }
+                }
+            } catch (err) {
+                console.error("Cloud password check error:", err);
+            }
+
+            // 2. Lock check: If username is already registered, verify password match
+            const existingPlayer = globalLeaderboardCache.find(entry => entry.name === name);
+
+            if (existingPlayer) {
+                if (existingPlayer.password && existingPlayer.password !== pass) {
+                    alert(`Username "${name}" is claimed! Enter the correct password or choose a different username.`);
+                    return;
+                }
+            }
+
+            // Password verified or new username registered successfully
             currentUsername = name;
             currentPassword = pass;
+
             document.getElementById('hud-username').innerText = currentUsername;
             document.getElementById('player-hud-tag').classList.remove('hidden');
             document.getElementById('start-screen').classList.add('hidden');
@@ -439,6 +484,7 @@
             gameState = 'START';
             currentUsername = "PLAYER";
             currentPassword = "";
+            
             document.getElementById('player-hud-tag').classList.add('hidden');
             document.getElementById('gameover-screen').classList.add('hidden');
             document.getElementById('start-screen').classList.remove('hidden');
@@ -740,7 +786,7 @@
         }
 
         /* ==========================================================================
-           CLOUD BACKEND API (JSONBIN.IO INTEGRATION)
+           JSONBIN.IO CLOUD BACKEND FUNCTIONS
            ========================================================================== */
         let globalLeaderboardCache = [];
 
@@ -748,6 +794,7 @@
             const listContainer = document.getElementById('leaderboard-list');
 
             try {
+                // Reads latest version of your combined high score & password bin
                 const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
                     headers: { 'X-Master-Key': JSONBIN_API_KEY }
                 });
@@ -787,6 +834,12 @@
                 const existingIndex = leaderboard.findIndex(entry => entry.name === name);
 
                 if (existingIndex !== -1) {
+                    // Password verification check
+                    if (leaderboard[existingIndex].password && leaderboard[existingIndex].password !== currentPassword) {
+                        if (statusEl) statusEl.innerText = "Authentication error: Password mismatch!";
+                        return;
+                    }
+
                     if (scoreVal > leaderboard[existingIndex].score) {
                         leaderboard[existingIndex].score = scoreVal;
                         leaderboard[existingIndex].date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -795,8 +848,10 @@
                         return;
                     }
                 } else {
+                    // Save new entry with username, password, score, and date
                     leaderboard.push({
                         name: name,
+                        password: currentPassword,
                         score: scoreVal,
                         date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                     });
@@ -805,6 +860,7 @@
                 leaderboard.sort((a, b) => b.score - a.score);
                 globalLeaderboardCache = leaderboard;
 
+                // Updates JSONBin array with versioning disabled
                 const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
                     method: 'PUT',
                     headers: {
