@@ -137,7 +137,6 @@
                         <button onclick="restartGame()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-slate-100 font-pixel font-bold text-xs rounded-lg shadow-lg transition active:scale-95">
                             RETRY
                         </button>
-                        <!-- LOGOUT BUTTON ON DEATH SCREEN -->
                         <button onclick="handleLogout()" class="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/40 text-rose-300 font-pixel font-bold text-xs rounded-lg shadow-lg transition active:scale-95">
                             LOGOUT
                         </button>
@@ -241,19 +240,13 @@
     <script>
         /* ==========================================================================
            GLOBAL CLOUD BACKEND CREDENTIALS
-           --------------------------------------------------------------------------
-           1. JSONBIN_BIN_ID: Paste your 24-character Bin ID below. 
-              This single bin holds the entire leaderboard array. Each player record 
-              inside the array contains: { name, password, score, date }.
-           
-           2. JSONBIN_API_KEY: Paste your JSONBin Master API Key below.
-              Master keys start with "$2a$10$" and grant read/write access.
+           PASTE YOUR ACTUAL JSONBIN BIN ID & MASTER KEY BELOW
            ========================================================================== */
         
-        // PASTE YOUR HIGH SCORES & PASSWORD BIN ID HERE (24 characters, e.g. "65d1f2e8abc123456789def0"):
-        const JSONBIN_BIN_ID = "6ad5b08aac6210605a3dcd36";
+        // 1. YOUR 24-CHARACTER BIN ID:
+        const JSONBIN_BIN_ID = "6ad5b9b0ac6210605a3de228";
 
-        // PASTE YOUR MASTER API KEY HERE (Starts with "$2a$10$"):
+        // 2. YOUR MASTER API KEY (Starts with "$2a$10$"):
         const JSONBIN_API_KEY = "$2a$10$LlSUNPh6G6VazqYVfUF2nutarV7niI6.wwu97QsIxyq0/YyFRkjgC";
 
         const dinoRun1 = new Image(); dinoRun1.src = 'run1.png';
@@ -421,9 +414,6 @@
             }
         }
 
-        /* ==========================================================================
-           PASSWORD & USERNAME AUTHENTICATION AT GAME START
-           ========================================================================== */
         async function handleStartGame(e) {
             e.preventDefault();
             const usernameInput = document.getElementById('username-input');
@@ -433,7 +423,7 @@
             const pass = passwordInput.value.trim();
 
             if (!name || !pass) {
-                alert("Both Username and Password are required to protect your score!");
+                alert("Both Username and Password are required!");
                 return;
             }
 
@@ -442,7 +432,6 @@
                 return;
             }
 
-            // 1. Fetch latest live cloud data to check if username exists
             try {
                 const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
                     headers: { 'X-Master-Key': JSONBIN_API_KEY }
@@ -458,7 +447,6 @@
                 console.error("Cloud password check error:", err);
             }
 
-            // 2. Lock check: If username is already registered, verify password match
             const existingPlayer = globalLeaderboardCache.find(entry => entry.name === name);
 
             if (existingPlayer) {
@@ -468,7 +456,6 @@
                 }
             }
 
-            // Password verified or new username registered successfully
             currentUsername = name;
             currentPassword = pass;
 
@@ -786,7 +773,7 @@
         }
 
         /* ==========================================================================
-           JSONBIN.IO CLOUD BACKEND FUNCTIONS
+           CLOUD BACKEND API (JSONBIN.IO INTEGRATION)
            ========================================================================== */
         let globalLeaderboardCache = [];
 
@@ -794,7 +781,6 @@
             const listContainer = document.getElementById('leaderboard-list');
 
             try {
-                // Reads latest version of your combined high score & password bin
                 const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
                     headers: { 'X-Master-Key': JSONBIN_API_KEY }
                 });
@@ -834,7 +820,6 @@
                 const existingIndex = leaderboard.findIndex(entry => entry.name === name);
 
                 if (existingIndex !== -1) {
-                    // Password verification check
                     if (leaderboard[existingIndex].password && leaderboard[existingIndex].password !== currentPassword) {
                         if (statusEl) statusEl.innerText = "Authentication error: Password mismatch!";
                         return;
@@ -848,7 +833,6 @@
                         return;
                     }
                 } else {
-                    // Save new entry with username, password, score, and date
                     leaderboard.push({
                         name: name,
                         password: currentPassword,
@@ -860,7 +844,6 @@
                 leaderboard.sort((a, b) => b.score - a.score);
                 globalLeaderboardCache = leaderboard;
 
-                // Updates JSONBin array with versioning disabled
                 const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
                     method: 'PUT',
                     headers: {
@@ -980,64 +963,64 @@
             });
         }
 
-       sync function adminDeletePlayer(name) {
-    if (confirm(`Delete high score entry for ${name} globally?`)) {
-        let list = globalLeaderboardCache.filter(entry => entry.name !== name);
-        globalLeaderboardCache = list;
-        
-        try {
-            const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'X-Master-Key': JSONBIN_API_KEY,
-                    'X-Bin-Versioning': 'false'
-                },
-                body: JSON.stringify(list)
-            });
+        async function adminDeletePlayer(name) {
+            if (confirm(`Delete high score entry for ${name} globally?`)) {
+                let list = globalLeaderboardCache.filter(entry => entry.name !== name);
+                globalLeaderboardCache = list;
+                
+                try {
+                    const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                        method: 'PUT',
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-Master-Key': JSONBIN_API_KEY,
+                            'X-Bin-Versioning': 'false'
+                        },
+                        body: JSON.stringify(list)
+                    });
 
-            if (res.ok) {
-                alert(`Deleted ${name} from global leaderboard.`);
-            } else {
-                alert(`Delete failed (HTTP ${res.status}). Check API key permissions.`);
+                    if (res.ok) {
+                        alert(`Deleted ${name} from global leaderboard.`);
+                    } else {
+                        alert(`Delete failed (HTTP ${res.status}). Check API key permissions.`);
+                    }
+                } catch (err) {
+                    alert("Network error while deleting player.");
+                }
+
+                renderAdminPlayerList();
+                fetchGlobalLeaderboard();
             }
-        } catch (err) {
-            alert("Network error while deleting player.");
         }
 
-        renderAdminPlayerList();
-        fetchGlobalLeaderboard();
-    }
-}
+        async function clearLeaderboard() {
+            if (confirm("ADMIN WARNING: Are you sure you want to clear ALL global high scores?")) {
+                globalLeaderboardCache = [];
+                
+                try {
+                    const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                        method: 'PUT',
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-Master-Key': JSONBIN_API_KEY,
+                            'X-Bin-Versioning': 'false'
+                        },
+                        body: JSON.stringify([])
+                    });
 
-async function clearLeaderboard() {
-    if (confirm("ADMIN WARNING: Are you sure you want to clear ALL global high scores?")) {
-        globalLeaderboardCache = [];
-        
-        try {
-            const res = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'X-Master-Key': JSONBIN_API_KEY,
-                    'X-Bin-Versioning': 'false'
-                },
-                body: JSON.stringify([])
-            });
+                    if (res.ok) {
+                        alert("Global Leaderboard wiped successfully.");
+                    } else {
+                        alert(`Reset failed (HTTP ${res.status}). Verify JSONBin Master Key.`);
+                    }
+                } catch (err) {
+                    alert("Network error while resetting leaderboard.");
+                }
 
-            if (res.ok) {
-                alert("Global Leaderboard wiped successfully.");
-            } else {
-                alert(`Reset failed (HTTP ${res.status}). Verify JSONBin Master Key.`);
+                renderAdminPlayerList();
+                fetchGlobalLeaderboard();
             }
-        } catch (err) {
-            alert("Network error while resetting leaderboard.");
         }
-
-        renderAdminPlayerList();
-        fetchGlobalLeaderboard();
-    }
-}
     </script>
 </body>
 </html>
