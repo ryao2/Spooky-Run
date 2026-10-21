@@ -6,58 +6,77 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ message: 'Method Not Allowed' });
 
-    const { adminPassword, action, payload } = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch (e) {
+            return res.status(400).json({ message: 'Invalid JSON body' });
+        }
+    }
+
+    const { action, payload, adminPassword } = body || {};
+
+    if (!action) {
+        return res.status(400).json({ message: "Missing required 'action' field." });
+    }
+
     const BIN_ID = process.env.JSONBIN_BIN_ID;
     const ACCESS_KEY = process.env.JSONBIN_ACCESS_KEY;
     const SERVER_ADMIN_PASS = process.env.ADMIN_PASSWORD || 'bingbing';
 
+    if (!BIN_ID || !ACCESS_KEY) {
+        return res.status(500).json({ message: "Environment variables JSONBIN_BIN_ID or JSONBIN_ACCESS_KEY missing on Vercel." });
+    }
+
     try {
-        // Fetch current bin record
         const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
             headers: { 'X-Access-Key': ACCESS_KEY }
         });
-        const json = await fetchRes.json();
+
+        if (!fetchRes.ok) {
+            const errData = await fetchRes.json().catch(() => ({}));
+            return res.status(fetchRes.status).json({ message: "Failed fetching JSONBin", error: errData });
+        }
+
+        const rawJson = await fetchRes.json();
         
-        // Extract array regardless of whether JSONBin wrapped it in record or leaderboard
+        // Unwrap array safely from JSONBin v3 response
         let leaderboard = [];
-        if (Array.isArray(json.record)) {
-            leaderboard = json.record;
-        } else if (json.record && Array.isArray(json.record.leaderboard)) {
-            leaderboard = json.record.leaderboard;
-        } else if (Array.isArray(json)) {
-            leaderboard = json;
+        let record = rawJson.record;
+
+        if (Array.isArray(record)) {
+            leaderboard = record;
+        } else if (record && Array.isArray(record.leaderboard)) {
+            leaderboard = record.leaderboard;
+        } else if (Array.isArray(rawJson)) {
+            leaderboard = rawJson;
         }
 
-        // Action: Fetch All
         if (action === 'FETCH_ALL') {
-            return res.status(200).json({ leaderboard });
+            return res.status(200).json({ success: true, leaderboard });
         }
 
-        // Action: Submit Score
         if (action === 'SUBMIT_SCORE') {
             const { playerName, score, password } = payload || {};
-            if (!playerName) return res.status(400).json({ message: "Player name required" });
+            if (!playerName) return res.status(400).json({ message: "playerName required" });
 
+            const numScore = parseInt(score, 10) || 0;
             const existingIdx = leaderboard.findIndex(e => (e.name || e.username) === playerName);
 
             if (existingIdx !== -1) {
-                if (score > (leaderboard[existingIdx].score || 0)) {
-                    leaderboard[existingIdx].score = score;
+                if (numScore > (leaderboard[existingIdx].score || 0)) {
+                    leaderboard[existingIdx].score = numScore;
                     leaderboard[existingIdx].date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                 }
             } else {
                 leaderboard.push({
                     name: playerName,
-                    password: password,
-                    score: score,
+                    score: numScore,
                     date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                 });
             }
 
-            // Sort descending
             leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0));
 
-            // Save back to JSONBin with explicit versioning disabled
             const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                 method: 'PUT',
                 headers: {
@@ -69,27 +88,18 @@ export default async function handler(req, res) {
             });
 
             if (!updateRes.ok) {
-                const errData = await updateRes.json();
-                return res.status(updateRes.status).json({ message: "JSONBin save failed", error: errData });
+                const errData = await updateRes.json().catch(() => ({}));
+                return res.status(updateRes.status).json({ message: "Failed saving to JSONBin", error: errData });
             }
 
             return res.status(200).json({ success: true, leaderboard });
         }
 
-        // Protected Admin Actions
         if (adminPassword !== SERVER_ADMIN_PASS) {
             return res.status(401).json({ message: 'Unauthorized' });
         }
 
-        if (action === 'UPDATE_SCORE') {
-            const { playerName, newScore } = payload || {};
-            const idx = leaderboard.findIndex(e => (e.name || e.username) === playerName);
-            if (idx !== -1) leaderboard[idx].score = parseInt(newScore, 10);
-        } else if (action === 'RESET_PASS') {
-            const { playerName, newPassword } = payload || {};
-            const idx = leaderboard.findIndex(e => (e.name || e.username) === playerName);
-            if (idx !== -1) leaderboard[idx].password = newPassword;
-        } else if (action === 'DELETE_PLAYER') {
+        if (action === 'DELETE_PLAYER') {
             const { playerName } = payload || {};
             leaderboard = leaderboard.filter(e => (e.name || e.username) !== playerName);
         } else if (action === 'CLEAR_ALL') {
@@ -111,7 +121,7 @@ export default async function handler(req, res) {
         if (adminUpdateRes.ok) {
             return res.status(200).json({ success: true, leaderboard });
         } else {
-            return res.status(500).json({ message: 'Failed to update JSONBin' });
+            return res.status(500).json({ message: 'Admin save failed' });
         }
 
     } catch (err) {
