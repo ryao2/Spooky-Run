@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const SERVER_ADMIN_PASS = process.env.ADMIN_PASSWORD || 'bingbing';
 
     if (!BIN_ID || !ACCESS_KEY) {
-        return res.status(500).json({ message: "Environment variables JSONBIN_BIN_ID or JSONBIN_ACCESS_KEY missing on Vercel." });
+        return res.status(500).json({ message: "Environment variables missing on Vercel." });
     }
 
     try {
@@ -39,7 +39,6 @@ export default async function handler(req, res) {
 
         const rawJson = await fetchRes.json();
         
-        // Unwrap array safely from JSONBin v3 response
         let leaderboard = [];
         let record = rawJson.record;
 
@@ -57,25 +56,26 @@ export default async function handler(req, res) {
 
         if (action === 'SUBMIT_SCORE') {
             const { playerName, score, password } = payload || {};
-            if (!playerName) return res.status(400).json({ message: "playerName required" });
+            const name = playerName || body.playerName || "ANONYMOUS";
+            const numScore = parseInt(score !== undefined ? score : body.score, 10) || 0;
 
-            const numScore = parseInt(score, 10) || 0;
-            const existingIdx = leaderboard.findIndex(e => (e.name || e.username) === playerName);
+            const existingIdx = leaderboard.findIndex(e => (e.name || e.username || e.playerName) === name);
 
             if (existingIdx !== -1) {
-                if (numScore > (leaderboard[existingIdx].score || 0)) {
+                if (numScore > (leaderboard[existingIdx].score || leaderboard[existingIdx].points || 0)) {
                     leaderboard[existingIdx].score = numScore;
                     leaderboard[existingIdx].date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                 }
             } else {
                 leaderboard.push({
-                    name: playerName,
+                    name: name,
                     score: numScore,
-                    date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                    date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                    password: password || ''
                 });
             }
 
-            leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0));
+            leaderboard.sort((a, b) => (b.score || b.points || 0) - (a.score || a.points || 0));
 
             const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                 method: 'PUT',
@@ -101,12 +101,12 @@ export default async function handler(req, res) {
 
         if (action === 'DELETE_PLAYER') {
             const { playerName } = payload || {};
-            leaderboard = leaderboard.filter(e => (e.name || e.username) !== playerName);
+            leaderboard = leaderboard.filter(e => (e.name || e.username || e.playerName) !== playerName);
         } else if (action === 'CLEAR_ALL') {
             leaderboard = [];
         }
 
-        leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0));
+        leaderboard.sort((a, b) => (b.score || b.points || 0) - (a.score || a.points || 0));
 
         const adminUpdateRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
             method: 'PUT',
