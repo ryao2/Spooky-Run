@@ -97,7 +97,7 @@
                 </div>
 
                 <h2 class="font-pixel text-lg sm:text-xl text-purple-400">SPOOKY SELINA RUN</h2>
-                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter a username and password to lock your account on the global leaderboard!</p>
+                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter a username and password to save your score on the global leaderboard!</p>
 
                 <form onsubmit="handleStartGame(event)" class="w-full max-w-xs space-y-2.5">
                     <input type="text" id="username-input" maxlength="12" placeholder="USERNAME" required 
@@ -407,16 +407,46 @@
             });
         }
 
+        /* RESTORED: DUST & DOUBLE JUMP SMOKE PUFF ENGINE */
         function triggerJump() {
             const now = Date.now();
             if (!dino.isJumping) {
                 dino.vy = dino.jumpForce;
                 dino.isJumping = true;
                 dino.hasDoubleJumped = false;
+                spawnDustParticles(dino.x + 10, GROUND_Y);
             } else if (!dino.hasDoubleJumped && (now - lastDoubleJumpTime >= DOUBLE_JUMP_COOLDOWN_MS)) {
                 dino.vy = dino.jumpForce * 0.95;
                 dino.hasDoubleJumped = true;
                 lastDoubleJumpTime = now;
+                spawnDoubleJumpSmokePuff(dino.x + (dino.width / 2), dino.y + dino.height);
+            }
+        }
+
+        function spawnDustParticles(x, y) {
+            for (let i = 0; i < 3; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 1) * 1.5,
+                    size: Math.random() * 3 + 2,
+                    alpha: 0.8,
+                    color: '#94a3b8'
+                });
+            }
+        }
+
+        function spawnDoubleJumpSmokePuff(x, y) {
+            for (let i = 0; i < 6; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: (Math.random() - 0.5) * 3,
+                    size: Math.random() * 5 + 3,
+                    alpha: 0.9,
+                    isSmoke: true,
+                    color: '#c084fc'
+                });
             }
         }
 
@@ -526,10 +556,23 @@
                 dino.animFrame = (dino.animFrame === 0) ? 1 : 0;
             }
 
+            if (!dino.isJumping && Math.random() < 0.2) {
+                spawnDustParticles(dino.x, GROUND_Y);
+            }
+
             clouds.forEach(c => {
                 c.x -= c.speed;
                 if (c.x + c.width < 0) c.x = V_WIDTH + 50;
             });
+
+            for (let idx = particles.length - 1; idx >= 0; idx--) {
+                const p = particles[idx];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= p.fadeSpeed || 0.04;
+                if (p.isSmoke) p.size += 0.3;
+                if (p.alpha <= 0) particles.splice(idx, 1);
+            }
 
             const minSpawnDistance = Math.max(220, 250 + (gameSpeed * 8));
             if (obstacles.length === 0 || V_WIDTH - obstacles[obstacles.length - 1].x > minSpawnDistance + Math.random() * 180) {
@@ -701,6 +744,17 @@
                         ctx.drawImage(pteroImg, obs.x, obs.y + (singleH * 2), obs.width, singleH);
                     }
                 }
+            });
+
+            /* RESTORED: RENDER PARTICLES (Dust & Smoke Puffs) */
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color || '#ffffff';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
             });
         }
 
