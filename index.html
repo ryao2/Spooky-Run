@@ -12,6 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:,">
 
     <script>
         tailwind.config = {
@@ -681,19 +682,21 @@
             }
         }
 
-        function triggerGameOver() {
-            gameState = 'GAMEOVER';
+       let isGameOverProcessed = false; // Add this near your top-level game state variables
 
-            document.getElementById('final-score').innerText = score;
-            document.getElementById('final-high-score').innerText = getUserPersonalBest(currentUsername);
+function triggerGameOver() {
+    if (isGameOverProcessed) return; // Prevent multiple executions during game loop
+    isGameOverProcessed = true;
 
-            const posterImgEl = document.getElementById('death-poster-img');
-            posterImgEl.src = 'poster.png?' + new Date().getTime();
+    // Your existing game over logic...
+    saveScoreGlobal(currentPlayerName, currentScore, currentPlayerPassword);
+}
 
-            document.getElementById('gameover-screen').classList.remove('hidden');
-            saveScoreGlobal(currentUsername, score);
-        }
-
+// Reset this flag when starting a new game:
+function resetGame() {
+    isGameOverProcessed = false;
+    // ... rest of game restart logic
+}
         function render() {
             const bgR = Math.floor(15 * (1 - dayNightFactor) + 15 * dayNightFactor);
             const bgG = Math.floor(23 * (1 - dayNightFactor) + 23 * dayNightFactor);
@@ -848,32 +851,42 @@
     }
 }
 
-        async function saveScoreGlobal(name, scoreVal) {
-            const statusEl = document.getElementById('sync-status-msg');
-            if (statusEl) statusEl.innerText = "Syncing score to cloud...";
-
-            try {
-                const res = await fetch(VERCEL_AUTH_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'SUBMIT_SCORE',
-                        payload: { playerName: name, score: scoreVal, password: currentPassword }
-                    })
-                });
-
-                if (res.ok) {
-                    if (statusEl) statusEl.innerText = "Score uploaded to global leaderboard!";
-                    fetchGlobalLeaderboard();
-                } else {
-                    if (statusEl) statusEl.innerText = `Sync failed. Check proxy.`;
+       async function saveScoreGlobal(playerName, score, password) {
+    if (!playerName) return;
+    
+    try {
+        const res = await fetch(VERCEL_AUTH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'SUBMIT_SCORE',
+                payload: {
+                    playerName: playerName,
+                    score: Math.floor(score),
+                    password: password || ''
                 }
+            })
+        });
 
-            } catch (e) {
-                if (statusEl) statusEl.innerText = "Offline or blocked by network rule.";
-            }
+        if (!res.ok) {
+            const errData = await res.json();
+            console.error("Save score error:", errData);
+            alert("Sync failed, check proxy");
+            return;
         }
 
+        const data = await res.json();
+        console.log("Score saved successfully:", data);
+        
+        // Refresh local leaderboard display if needed
+        if (typeof fetchGlobalLeaderboard === 'function') {
+            fetchGlobalLeaderboard();
+        }
+    } catch (err) {
+        console.error("Network error saving score:", err);
+        alert("Sync failed, check proxy");
+    }
+}
         function getUserPersonalBest(name) {
             const entry = globalLeaderboardCache.find(item => (item.name || item.username) === name);
             return entry ? (entry.score || 0) : score;
