@@ -40,7 +40,7 @@
 </head>
 <body class="h-full flex flex-col justify-between bg-slate-950 text-slate-100 overflow-x-hidden">
 
-    <!-- Top Bar Navigation / HUD -->
+    <!-- Top Navigation HUD -->
     <header class="w-full max-w-5xl mx-auto p-4 flex justify-between items-center z-20">
         <div class="flex items-center space-x-3">
             <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500 flex items-center justify-center overflow-hidden">
@@ -73,7 +73,7 @@
         </div>
     </header>
 
-    <!-- Main Game Container -->
+    <!-- Main Game Canvas Frame -->
     <main class="w-full max-w-5xl mx-auto px-4 my-auto flex flex-col items-center justify-center relative">
         <div id="game-frame" class="relative w-full aspect-[2/1] sm:aspect-[2.4/1] max-h-[540px] bg-slate-900 border-2 border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
             
@@ -97,7 +97,7 @@
                 </div>
 
                 <h2 class="font-pixel text-lg sm:text-xl text-purple-400">SPOOKY SELINA RUN</h2>
-                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter a username and password to lock your account on the global leaderboard!</p>
+                <p id="start-subtext" class="text-xs text-slate-400 max-w-sm">Enter a username and password to save your score on the global leaderboard!</p>
 
                 <form onsubmit="handleStartGame(event)" class="w-full max-w-xs space-y-2.5">
                     <input type="text" id="username-input" maxlength="12" placeholder="USERNAME" required 
@@ -147,7 +147,7 @@
 
         </div>
 
-        <!-- Touch Controls -->
+        <!-- Mobile Touch Controls -->
         <div class="w-full grid grid-cols-2 gap-3 mt-4 sm:hidden">
             <button id="touch-duck-btn" class="py-4 bg-slate-900 active:bg-slate-800 border border-slate-800 rounded-xl text-center font-pixel text-xs text-slate-300 flex items-center justify-center gap-2">
                 <i class="fa-solid fa-arrow-down"></i> DUCK / FAST FALL
@@ -164,7 +164,7 @@
         </div>
     </main>
 
-    <!-- Global Leaderboard Modal -->
+    <!-- Leaderboard Modal -->
     <div id="leaderboard-modal" class="hidden fixed inset-0 glass-panel z-50 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
@@ -262,14 +262,13 @@
         let isAdminLoggedIn = false;
         let currentAdminPass = "";
         let isGameOverProcessed = false;
-        let animationFrameId = null;
         let globalLeaderboardCache = [];
 
         const DOUBLE_JUMP_COOLDOWN_MS = 5000;
         let lastDoubleJumpTime = 0;
 
         /* ==========================================================================
-           2. AES ENCRYPTION HELPERS
+           2. CLIENT AES ENCRYPTION HELPERS
            ========================================================================== */
         async function deriveAdminKey(adminPass) {
             const enc = new TextEncoder();
@@ -323,7 +322,7 @@
         }
 
         /* ==========================================================================
-           3. ASSET INITIALIZATION
+           3. ASSET LOADING & FALLBACKS
            ========================================================================== */
         const dinoRun1 = new Image(); dinoRun1.src = 'run1.png';
         const dinoRun2 = new Image(); dinoRun2.src = 'run2.png';
@@ -507,7 +506,7 @@
         }
 
         /* ==========================================================================
-           5. START, LOGIN & LOGOUT HANDLERS
+           5. AUTHENTICATION HANDLERS
            ========================================================================== */
         async function handleStartGame(e) {
             e.preventDefault();
@@ -585,7 +584,7 @@
         }
 
         /* ==========================================================================
-           6. GAME ENGINE LOOP & UPDATE LOGIC
+           6. GAME LOOP & UPDATES
            ========================================================================== */
         function gameLoop() {
             update();
@@ -851,7 +850,7 @@
         }
 
         /* ==========================================================================
-           9. LEADERBOARD & ADMIN MODAL FUNCTIONS
+           9. LEADERBOARD & ADMIN MODALS
            ========================================================================== */
         async function fetchGlobalLeaderboard() {
             const listEl = document.getElementById('leaderboard-list');
