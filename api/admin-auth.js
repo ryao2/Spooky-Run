@@ -6,39 +6,46 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ message: 'Method Not Allowed' });
 
-    let body = req.body;
-    if (typeof body === 'string') {
-        try { body = JSON.parse(body); } catch (e) {
-            return res.status(400).json({ message: 'Invalid JSON body' });
-        }
-    }
-
-    const { action, payload, adminPassword } = body || {};
-
-    if (!action) {
-        return res.status(400).json({ message: "Missing required 'action' field." });
-    }
-
-    const BIN_ID = process.env.JSONBIN_BIN_ID;
-    const ACCESS_KEY = process.env.JSONBIN_ACCESS_KEY;
-    const SERVER_ADMIN_PASS = process.env.ADMIN_PASSWORD || 'bingbing';
-
-    if (!BIN_ID || !ACCESS_KEY) {
-        return res.status(500).json({ message: "Environment variables missing on Vercel." });
-    }
-
     try {
+        let body = req.body;
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (e) {
+                return res.status(400).json({ message: 'Invalid JSON body' });
+            }
+        }
+
+        const { action, payload, adminPassword } = body || {};
+
+        if (!action) {
+            return res.status(400).json({ message: "Missing required 'action' field." });
+        }
+
+        const BIN_ID = (process.env.JSONBIN_BIN_ID || '').trim();
+        const ACCESS_KEY = (process.env.JSONBIN_ACCESS_KEY || '').trim();
+        const SERVER_ADMIN_PASS = process.env.ADMIN_PASSWORD || 'bingbing';
+
+        if (!BIN_ID || !ACCESS_KEY) {
+            return res.status(200).json({ 
+                success: false, 
+                message: "Missing JSONBIN_BIN_ID or JSONBIN_ACCESS_KEY on Vercel." 
+            });
+        }
+
+        // 1. Fetch current leaderboard from JSONBin
         const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
             headers: { 'X-Access-Key': ACCESS_KEY }
         });
 
+        const rawJson = await fetchRes.json().catch(() => ({}));
+
         if (!fetchRes.ok) {
-            const errData = await fetchRes.json().catch(() => ({}));
-            return res.status(fetchRes.status).json({ message: "Failed fetching JSONBin", error: errData });
+            return res.status(200).json({ 
+                success: false, 
+                message: `JSONBin Fetch Failed (${fetchRes.status})`, 
+                details: rawJson 
+            });
         }
 
-        const rawJson = await fetchRes.json();
-        
         let leaderboard = [];
         let record = rawJson.record;
 
@@ -87,9 +94,14 @@ export default async function handler(req, res) {
                 body: JSON.stringify(leaderboard)
             });
 
+            const updateData = await updateRes.json().catch(() => ({}));
+
             if (!updateRes.ok) {
-                const errData = await updateRes.json().catch(() => ({}));
-                return res.status(updateRes.status).json({ message: "Failed saving to JSONBin", error: errData });
+                return res.status(200).json({ 
+                    success: false, 
+                    message: `JSONBin Save Failed (${updateRes.status})`, 
+                    details: updateData 
+                });
             }
 
             return res.status(200).json({ success: true, leaderboard });
@@ -125,6 +137,6 @@ export default async function handler(req, res) {
         }
 
     } catch (err) {
-        return res.status(500).json({ message: err.message });
+        return res.status(200).json({ success: false, error: err.message });
     }
 }
