@@ -265,7 +265,7 @@
         let lastDoubleJumpTime = 0;
 
         /* ==========================================================================
-           ASSET PRELOADING & INSTANTIATION
+           ASSET PRELOADING
            ========================================================================== */
         const dinoRun1 = new Image(); dinoRun1.src = 'run1.png';
         const dinoRun2 = new Image(); dinoRun2.src = 'run2.png';
@@ -364,4 +364,521 @@
 
         function setupControls() {
             window.addEventListener('keydown', (e) => {
+                if (e.target && e.target.tagName === 'INPUT') return;
+
+                if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                    e.preventDefault();
+                    if (gameState === 'PLAYING') triggerJump();
+                    else if (gameState === 'GAMEOVER') restartGame();
+                }
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                    e.preventDefault();
+                    if (gameState === 'PLAYING') {
+                        dino.isDucking = true;
+                        if (dino.isJumping) dino.vy += 6.5;
+                    }
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.target && e.target.tagName === 'INPUT') return;
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') dino.isDucking = false;
+            });
+
+            const jumpBtn = document.getElementById('touch-jump-btn');
+            const duckBtn = document.getElementById('touch-duck-btn');
+
+            if (jumpBtn) {
+                jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameState === 'PLAYING') triggerJump(); });
+            }
+            if (duckBtn) {
+                duckBtn.addEventListener('touchstart', (e) => { 
+                    e.preventDefault(); 
+                    if (gameState === 'PLAYING') {
+                        dino.isDucking = true; 
+                        if (dino.isJumping) dino.vy += 6.5; 
+                    } 
+                });
+                duckBtn.addEventListener('touchend', (e) => { e.preventDefault(); dino.isDucking = false; });
+            }
+
+            canvas.addEventListener('mousedown', () => {
+                if (gameState === 'PLAYING') triggerJump();
+            });
+        }
+
+        function triggerJump() {
+            const now = Date.now();
+            if (!dino.isJumping) {
+                dino.vy = dino.jumpForce;
+                dino.isJumping = true;
+                dino.hasDoubleJumped = false;
+            } else if (!dino.hasDoubleJumped && (now - lastDoubleJumpTime >= DOUBLE_JUMP_COOLDOWN_MS)) {
+                dino.vy = dino.jumpForce * 0.95;
+                dino.hasDoubleJumped = true;
+                lastDoubleJumpTime = now;
+            }
+        }
+
+        async function handleStartGame(e) {
+            e.preventDefault();
+            const usernameInput = document.getElementById('username-input');
+            const passwordInput = document.getElementById('password-input');
+            
+            const name = usernameInput.value.trim().toUpperCase();
+            const rawPass = passwordInput.value.trim();
+
+            if (!name || !rawPass) {
+                alert("Both Username and Password are required!");
+                return;
+            }
+
+            if (name === 'ADMIN') {
+                openAdminModal();
+                return;
+            }
+
+            currentUsername = name;
+            currentPassword = rawPass;
+
+            document.getElementById('hud-username').innerText = currentUsername;
+            document.getElementById('player-hud-tag').classList.remove('hidden');
+            document.getElementById('start-screen').classList.add('hidden');
+
+            startBackgroundMusic();
+            startGame();
+        }
+
+        function handleLogout() {
+            gameState = 'START';
+            currentUsername = "PLAYER";
+            currentPassword = "";
+            isGameOverProcessed = false;
+            
+            document.getElementById('player-hud-tag').classList.add('hidden');
+            document.getElementById('gameover-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+            document.getElementById('username-input').value = '';
+            document.getElementById('password-input').value = '';
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            isGameOverProcessed = false;
+            score = 0;
+            gameSpeed = 8.5;
+            distanceRun = 0;
+            lastDoubleJumpTime = 0;
+            obstacles = [];
+            particles = [];
+            dino.y = GROUND_Y - 44;
+            dino.vy = 0;
+            dino.isJumping = false;
+            dino.hasDoubleJumped = false;
+            dino.isDucking = false;
+            dino.animTimer = 0;
+            dino.animFrame = 0;
+            document.getElementById('gameover-screen').classList.add('hidden');
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            distanceRun += gameSpeed * 0.2;
+            score = Math.floor(distanceRun);
+
+            isNight = Math.floor(score / 500) % 2 === 1;
+            if (isNight && dayNightFactor < 1) dayNightFactor += 0.01;
+            else if (!isNight && dayNightFactor > 0) dayNightFactor -= 0.01;
+
+            gameSpeed = Math.min(14.0, 7.5 + Math.log(1 + score / 200) * 1.8);
+
+            if (dino.isDucking) {
+                dino.height = 24;
+                if (!dino.isJumping) dino.y = GROUND_Y - 24;
+            } else {
+                dino.height = 44;
+            }
+
+            dino.vy += dino.gravity;
+            dino.y += dino.vy;
+
+            if (dino.y >= GROUND_Y - dino.height) {
+                dino.y = GROUND_Y - dino.height;
+                dino.vy = 0;
+                dino.isJumping = false;
+                dino.hasDoubleJumped = false;
+            }
+
+            dino.animTimer++;
+            if (dino.animTimer >= 8) {
+                dino.animTimer = 0;
+                dino.animFrame = (dino.animFrame === 0) ? 1 : 0;
+            }
+
+            clouds.forEach(c => {
+                c.x -= c.speed;
+                if (c.x + c.width < 0) c.x = V_WIDTH + 50;
+            });
+
+            const minSpawnDistance = Math.max(220, 250 + (gameSpeed * 8));
+            if (obstacles.length === 0 || V_WIDTH - obstacles[obstacles.length - 1].x > minSpawnDistance + Math.random() * 180) {
+                spawnObstacle();
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.x -= gameSpeed;
+
+                const paddingX = 8;
+                const paddingY = 6;
                 if (
+                    dino.x + paddingX < obs.x + obs.width &&
+                    dino.x + dino.width - paddingX > obs.x &&
+                    dino.y + paddingY < obs.y + obs.height &&
+                    dino.y + dino.height - paddingY > obs.y
+                ) {
+                    triggerGameOver();
+                    break;
+                }
+
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+        }
+
+        function spawnObstacle() {
+            const rand = Math.random();
+            if (rand < 0.35) {
+                obstacles.push({
+                    type: 'cactus',
+                    x: V_WIDTH,
+                    y: GROUND_Y - 40,
+                    width: 24,
+                    height: 40
+                });
+            } else if (rand < 0.70) {
+                obstacles.push({
+                    type: 'pterodactyl',
+                    x: V_WIDTH,
+                    y: GROUND_Y - (Math.random() < 0.5 ? 45 : 75),
+                    width: 36,
+                    height: 28,
+                    count: 1
+                });
+            } else {
+                obstacles.push({
+                    type: 'triple-pterodactyl',
+                    x: V_WIDTH,
+                    y: GROUND_Y - 72, 
+                    width: 36,
+                    height: 48,
+                    count: 3
+                });
+            }
+        }
+
+        function triggerGameOver() {
+            if (isGameOverProcessed) return;
+            isGameOverProcessed = true;
+
+            gameState = 'GAMEOVER';
+
+            const gameoverScreen = document.getElementById('gameover-screen');
+            if (gameoverScreen) gameoverScreen.classList.remove('hidden');
+
+            const finalScoreEl = document.getElementById('final-score');
+            if (finalScoreEl) finalScoreEl.innerText = Math.floor(score);
+
+            const userEntry = globalLeaderboardCache.find(e => (e.name || e.username || e.playerName) === currentUsername);
+            const bestScore = userEntry ? Math.max(userEntry.score || userEntry.points || 0, Math.floor(score)) : Math.floor(score);
+            
+            const bestEl = document.getElementById('final-high-score');
+            if (bestEl) bestEl.innerText = bestScore;
+
+            saveScoreGlobal(currentUsername, score, currentPassword);
+        }
+
+        async function saveScoreGlobal(playerName, playerScore, password) {
+            const statusEl = document.getElementById('sync-status-msg');
+            if (statusEl) statusEl.innerText = "Syncing score to cloud...";
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'SUBMIT_SCORE',
+                        payload: {
+                            playerName: playerName,
+                            score: Math.floor(playerScore),
+                            password: password || ''
+                        }
+                    })
+                });
+
+                if (!res.ok) {
+                    if (statusEl) statusEl.innerText = "Sync failed, check proxy";
+                    return;
+                }
+
+                const data = await res.json();
+                if (data.success && data.leaderboard) {
+                    globalLeaderboardCache = data.leaderboard;
+                    if (statusEl) statusEl.innerText = "Score saved to cloud!";
+                } else {
+                    if (statusEl) statusEl.innerText = "Sync failed, check proxy";
+                }
+            } catch (err) {
+                if (statusEl) statusEl.innerText = "Sync failed, check proxy";
+            }
+        }
+
+        function render() {
+            ctx.fillStyle = isNight ? '#020617' : '#0f172a';
+            ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
+
+            if (dayNightFactor > 0) {
+                ctx.save();
+                ctx.globalAlpha = dayNightFactor;
+                stars.forEach(s => {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(s.x, s.y, s.size, s.size);
+                });
+                ctx.restore();
+            }
+
+            ctx.fillStyle = '#1e293b';
+            clouds.forEach(c => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.width / 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(0, GROUND_Y, V_WIDTH, 2);
+
+            ctx.fillStyle = '#a855f7';
+            ctx.font = '10px "Press Start 2P"';
+            ctx.fillText(`SCORE: ${Math.floor(score)}`, V_WIDTH - 150, 30);
+
+            if (dino.isJumping) {
+                if (dinoJump.complete && dinoJump.naturalWidth !== 0) {
+                    ctx.drawImage(dinoJump, dino.x, dino.y, dino.width, dino.height);
+                }
+            } else {
+                const currentRunImg = (dino.animFrame === 0) ? dinoRun1 : dinoRun2;
+                if (currentRunImg.complete && currentRunImg.naturalWidth !== 0) {
+                    ctx.drawImage(currentRunImg, dino.x, dino.y, dino.width, dino.height);
+                }
+            }
+
+            obstacles.forEach(obs => {
+                if (obs.type === 'cactus') {
+                    if (cactusImg.complete && cactusImg.naturalWidth !== 0) {
+                        ctx.drawImage(cactusImg, obs.x, obs.y, obs.width, obs.height);
+                    }
+                } else if (obs.type === 'pterodactyl') {
+                    if (pteroImg.complete && pteroImg.naturalWidth !== 0) {
+                        ctx.drawImage(pteroImg, obs.x, obs.y, obs.width, obs.height);
+                    }
+                } else if (obs.type === 'triple-pterodactyl') {
+                    if (pteroImg.complete && pteroImg.naturalWidth !== 0) {
+                        const singleH = obs.height / 3;
+                        ctx.drawImage(pteroImg, obs.x, obs.y, obs.width, singleH);
+                        ctx.drawImage(pteroImg, obs.x, obs.y + singleH, obs.width, singleH);
+                        ctx.drawImage(pteroImg, obs.x, obs.y + (singleH * 2), obs.width, singleH);
+                    }
+                }
+            });
+        }
+
+        async function fetchGlobalLeaderboard() {
+            const listEl = document.getElementById('leaderboard-list');
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'FETCH_ALL' })
+                });
+
+                if (!res.ok) throw new Error("Fetch failed");
+                const data = await res.json();
+                
+                if (data.leaderboard) {
+                    globalLeaderboardCache = data.leaderboard;
+                    renderLeaderboard(data.leaderboard);
+                }
+            } catch (err) {
+                if (listEl) {
+                    listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores</div>`;
+                }
+            }
+        }
+
+        function renderLeaderboard(board) {
+            const listEl = document.getElementById('leaderboard-list');
+            if (!listEl) return;
+
+            if (!board || board.length === 0) {
+                listEl.innerHTML = `<div class="text-center py-6 text-slate-500 font-pixel text-xs">No global scores yet!</div>`;
+                return;
+            }
+
+            listEl.innerHTML = board.map((item, idx) => {
+                const displayName = item.name || item.username || item.playerName || item.user || 'ANONYMOUS';
+                const displayScore = item.score !== undefined ? item.score : (item.points || item.highScore || 0);
+                const displayDate = item.date || item.created_at || '';
+
+                return `
+                    <div class="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800 text-xs">
+                        <div class="flex items-center space-x-3">
+                            <span class="font-pixel text-[10px] ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600' : 'text-slate-600'}">#${idx + 1}</span>
+                            <span class="font-pixel text-purple-300 text-[10px]">${displayName}</span>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="font-pixel text-emerald-400 text-[10px]">${displayScore}</span>
+                            <span class="text-[9px] text-slate-500">${displayDate}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openLeaderboard() {
+            document.getElementById('leaderboard-modal').classList.remove('hidden');
+            fetchGlobalLeaderboard();
+        }
+
+        function closeLeaderboard() {
+            document.getElementById('leaderboard-modal').classList.add('hidden');
+        }
+
+        function openAdminModal() {
+            document.getElementById('admin-modal').classList.remove('hidden');
+        }
+
+        function closeAdminModal() {
+            document.getElementById('admin-modal').classList.add('hidden');
+        }
+
+        async function handleAdminLogin(e) {
+            e.preventDefault();
+            const passInput = document.getElementById('admin-pass-input');
+            const pass = passInput.value.trim();
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adminPassword: pass,
+                        action: 'FETCH_ALL'
+                    })
+                });
+
+                if (!res.ok) {
+                    alert("Invalid Admin Password!");
+                    return;
+                }
+
+                isAdminLoggedIn = true;
+                currentAdminPass = pass;
+                document.getElementById('admin-auth-panel').classList.add('hidden');
+                document.getElementById('admin-controls-panel').classList.remove('hidden');
+                renderAdminPlayerList();
+            } catch (err) {
+                alert("Admin auth failed");
+            }
+        }
+
+        function handleAdminLogout() {
+            isAdminLoggedIn = false;
+            currentAdminPass = "";
+            document.getElementById('admin-auth-panel').classList.remove('hidden');
+            document.getElementById('admin-controls-panel').classList.add('hidden');
+            document.getElementById('admin-pass-input').value = '';
+        }
+
+        async function renderAdminPlayerList() {
+            const listEl = document.getElementById('admin-player-list');
+            if (!listEl) return;
+
+            listEl.innerHTML = globalLeaderboardCache.map((item) => {
+                const displayName = item.name || item.username || item.playerName || 'ANONYMOUS';
+                const displayScore = item.score !== undefined ? item.score : (item.points || 0);
+
+                return `
+                    <div class="p-2.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+                        <div>
+                            <div class="font-pixel text-[10px] text-purple-300">${displayName}</div>
+                            <div class="text-[9px] text-slate-500">Score: ${displayScore}</div>
+                        </div>
+                        <button onclick="deletePlayer('${displayName}')" class="px-2 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded font-pixel text-[8px]">
+                            DELETE
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function deletePlayer(playerName) {
+            if (!confirm(`Delete ${playerName}?`)) return;
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adminPassword: currentAdminPass,
+                        action: 'DELETE_PLAYER',
+                        payload: { playerName }
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    globalLeaderboardCache = data.leaderboard;
+                    renderAdminPlayerList();
+                }
+            } catch (e) {
+                alert("Failed to delete player");
+            }
+        }
+
+        async function clearLeaderboard() {
+            if (!confirm("Are you sure you want to RESET the entire global leaderboard?")) return;
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adminPassword: currentAdminPass,
+                        action: 'CLEAR_ALL'
+                    })
+                });
+
+                if (res.ok) {
+                    globalLeaderboardCache = [];
+                    renderAdminPlayerList();
+                    alert("Leaderboard cleared!");
+                }
+            } catch (e) {
+                alert("Failed to clear leaderboard");
+            }
+        }
+    </script>
+</body>
+</html>
