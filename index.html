@@ -657,60 +657,85 @@
         }
 
         async function saveScoreGlobal(playerName, finalScore, password) {
-            const statusEl = document.getElementById('sync-status-msg');
-            const localHighScore = parseInt(localStorage.getItem('spooky_high_score') || '0', 10);
+    const statusEl = document.getElementById('sync-status-msg');
+    const cleanName = (playerName || 'ANONYMOUS').trim().toUpperCase();
+    const accountKey = `spooky_high_score_${cleanName}`;
+    
+    // Read local high score for THIS specific account
+    const localUserScore = parseInt(localStorage.getItem(accountKey) || '0', 10);
+    
+    let existingUserScore = localUserScore;
+    let playerExistsOnCloud = false;
 
-            // Quota Saver: Skip cloud request if current score does not beat personal local record
-            if (finalScore > localHighScore) {
-                localStorage.setItem('spooky_high_score', finalScore);
-            } else {
-                if (statusEl) {
-                    statusEl.innerText = "Score did not beat personal best (Sync skipped)";
-                    statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
+    // Check if player exists in the cached global leaderboard
+    if (Array.isArray(globalLeaderboardCache)) {
+        const cloudEntry = globalLeaderboardCache.find(e => 
+            (e.name || e.username || e.playerName || '').toUpperCase() === cleanName
+        );
+        if (cloudEntry) {
+            playerExistsOnCloud = true;
+            existingUserScore = Math.max(existingUserScore, parseInt(cloudEntry.score || cloudEntry.points || 0, 10));
+        }
+    }
+
+    // Determine if we should sync to JSONBin:
+    // Sync if: Player is NOT on the global leaderboard yet OR current run beats account personal best
+    const isNewAccount = !playerExistsOnCloud;
+    const beatsPersonalBest = finalScore > existingUserScore;
+
+    if (!isNewAccount && !beatsPersonalBest) {
+        if (statusEl) {
+            statusEl.innerText = "Score did not beat account record (Sync skipped)";
+            statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
+        }
+        return; 
+    }
+
+    // Update local high score for this account
+    const newBest = Math.max(existingUserScore, finalScore);
+    localStorage.setItem(accountKey, newBest);
+
+    if (statusEl) {
+        statusEl.innerText = "Syncing score to cloud...";
+        statusEl.className = "text-[10px] text-amber-400 font-pixel my-1 text-center animate-pulse";
+    }
+
+    try {
+        const res = await fetch(VERCEL_AUTH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'SUBMIT_SCORE',
+                payload: {
+                    playerName: cleanName,
+                    score: finalScore,
+                    password: password || ''
                 }
-                return; 
-            }
+            })
+        });
 
+        const data = await res.json();
+
+        if (res.ok && data.success) {
             if (statusEl) {
-                statusEl.innerText = "Syncing score to cloud...";
-                statusEl.className = "text-[10px] text-amber-400 font-pixel my-1 text-center animate-pulse";
+                statusEl.innerText = "Score saved to cloud!";
+                statusEl.className = "text-[10px] text-emerald-400 font-pixel my-1 text-center";
             }
-
-            try {
-                const res = await fetch(VERCEL_AUTH_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'SUBMIT_SCORE',
-                        payload: {
-                            playerName: playerName || 'ANONYMOUS',
-                            score: finalScore,
-                            password: password || ''
-                        }
-                    })
-                });
-
-                const data = await res.json();
-
-                if (res.ok && data.success) {
-                    if (statusEl) {
-                        statusEl.innerText = "Score saved to cloud!";
-                        statusEl.className = "text-[10px] text-emerald-400 font-pixel my-1 text-center";
-                    }
-                    globalLeaderboardCache = null;
-                } else {
-                    if (statusEl) {
-                        statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
-                        statusEl.className = "text-[10px] text-rose-400 font-pixel my-1 text-center";
-                    }
-                }
-            } catch (err) {
-                if (statusEl) {
-                    statusEl.innerText = "Offline mode - score saved locally";
-                    statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
-                }
+            // Clear cache so opening Global Scores fetches the new entry
+            globalLeaderboardCache = null;
+        } else {
+            if (statusEl) {
+                statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
+                statusEl.className = "text-[10px] text-rose-400 font-pixel my-1 text-center";
             }
         }
+    } catch (err) {
+        if (statusEl) {
+            statusEl.innerText = "Offline mode - score saved locally";
+            statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
+        }
+    }
+}
 
         function render() {
             ctx.fillStyle = isNight ? '#020617' : '#0f172a';
