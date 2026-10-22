@@ -263,6 +263,8 @@
 
         const DOUBLE_JUMP_COOLDOWN_MS = 5000;
         let lastDoubleJumpTime = 0;
+        let lastLeaderboardFetchTime = 0;
+        const CACHE_TTL_MS = 60000; // 60 seconds client cache
 
         /* ==========================================================================
            ASSET PRELOADING
@@ -780,8 +782,7 @@
 
 
 
-let lastLeaderboardFetchTime = 0;
-const CACHE_TTL_MS = 60000; // 60 seconds client cache
+
 
 
 async function fetchGlobalLeaderboard(forceRefresh = false) {
