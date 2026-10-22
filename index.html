@@ -45,7 +45,7 @@
         <div class="flex items-center space-x-3">
             <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500 flex items-center justify-center overflow-hidden">
                 <img src="logo.png" alt="Logo" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                <span class="hidden text-xl">🤠</span>
+                <span class="hidden text-xl">👻</span>
             </div>
             <div>
                 <h1 class="font-pixel text-sm sm:text-base text-purple-400 leading-none">SPOOKY SELINA RUN</h1>
@@ -93,7 +93,7 @@
             <div id="start-screen" class="absolute inset-0 glass-panel z-30 flex flex-col items-center justify-center p-6 text-center space-y-3">
                 <div class="w-24 h-24 max-h-24 sm:w-28 sm:h-28 flex items-center justify-center">
                     <img src="logo.png" alt="Game Logo" class="max-w-full max-h-full object-contain animate-bounce" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                    <div class="hidden text-5xl animate-bounce">🤠</div>
+                    <div class="hidden text-5xl animate-bounce">👻</div>
                 </div>
 
                 <h2 class="font-pixel text-lg sm:text-xl text-purple-400">SPOOKY SELINA RUN</h2>
@@ -120,10 +120,10 @@
                     
                     <div class="w-full flex-1 min-h-0 bg-slate-950 border border-purple-500/30 rounded-lg p-1 my-2 flex items-center justify-center overflow-hidden">
                         <img id="death-poster-img" src="poster.png" alt="Death Poster" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                        <div class="hidden text-6xl">🤠</div>
+                        <div class="hidden text-6xl">👻</div>
                     </div>
 
-                    <div id="sync-status-msg" class="text-[10px] font-pixel text-slate-400">Syncing score to cloud...</div>
+                    <div id="sync-status-msg" class="text-[10px] font-pixel text-slate-400 my-1">Syncing score to cloud...</div>
 
                     <div class="flex items-center justify-center gap-2 sm:gap-3 w-full max-w-md text-xs font-pixel">
                         <div class="px-3 py-1 bg-slate-950 rounded-lg border border-slate-800">
@@ -185,7 +185,7 @@
             </div>
 
             <div class="flex justify-between items-center border-t border-slate-800 pt-3 text-xs">
-                <button onclick="fetchGlobalLeaderboard()" class="text-purple-400 hover:text-purple-300 font-pixel text-[9px] flex items-center gap-1.5">
+                <button onclick="fetchGlobalLeaderboard(true)" class="text-purple-400 hover:text-purple-300 font-pixel text-[9px] flex items-center gap-1.5">
                     <i class="fa-solid fa-arrows-rotate"></i> REFRESH
                 </button>
                 <button onclick="closeLeaderboard()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-pixel text-[10px] rounded-lg">Close</button>
@@ -246,7 +246,7 @@
 
     <!-- GAME ENGINE & BACKEND SCRIPT -->
     <script>
-        const VERCEL_AUTH_URL = "https://spooky-run.vercel.app/api/admin-auth";
+        const VERCEL_AUTH_URL = "/api/admin-auth";
 
         let gameState = 'START';
         let currentUsername = "PLAYER";
@@ -259,12 +259,14 @@
         let isAdminLoggedIn = false;
         let currentAdminPass = "";
         let isGameOverProcessed = false;
-        let globalLeaderboardCache = [];
+
+        // Quota Caching & Performance
+        let globalLeaderboardCache = null;
+        let lastLeaderboardFetchTime = 0;
+        const CACHE_TTL_MS = 60000; // 60s client cache
 
         const DOUBLE_JUMP_COOLDOWN_MS = 5000;
         let lastDoubleJumpTime = 0;
-        let lastLeaderboardFetchTime = 0;
-        const CACHE_TTL_MS = 60000; // 60 seconds client cache
 
         /* ==========================================================================
            ASSET PRELOADING
@@ -409,7 +411,6 @@
             });
         }
 
-        /* RESTORED: DUST & DOUBLE JUMP SMOKE PUFF ENGINE */
         function triggerJump() {
             const now = Date.now();
             if (!dino.isJumping) {
@@ -646,70 +647,71 @@
             const finalScoreEl = document.getElementById('final-score');
             if (finalScoreEl) finalScoreEl.innerText = Math.floor(score);
 
-            const userEntry = globalLeaderboardCache.find(e => (e.name || e.username || e.playerName) === currentUsername);
+            const userEntry = Array.isArray(globalLeaderboardCache) ? globalLeaderboardCache.find(e => (e.name || e.username || e.playerName) === currentUsername) : null;
             const bestScore = userEntry ? Math.max(userEntry.score || userEntry.points || 0, Math.floor(score)) : Math.floor(score);
             
             const bestEl = document.getElementById('final-high-score');
             if (bestEl) bestEl.innerText = bestScore;
 
-            saveScoreGlobal(currentUsername, score, currentPassword);
+            saveScoreGlobal(currentUsername, Math.floor(score), currentPassword);
         }
 
-      async function saveScoreGlobal(playerName, finalScore) {
-    const statusEl = document.getElementById('sync-status');
-    const localHighScore = parseInt(localStorage.getItem('spooky_high_score') || '0', 10);
+        async function saveScoreGlobal(playerName, finalScore, password) {
+            const statusEl = document.getElementById('sync-status-msg');
+            const localHighScore = parseInt(localStorage.getItem('spooky_high_score') || '0', 10);
 
-    // Quota Saver: Skip cloud request if current score does not beat personal local record
-    if (finalScore > localHighScore) {
-        localStorage.setItem('spooky_high_score', finalScore);
-    } else {
-        if (statusEl) {
-            statusEl.innerText = "Score did not beat personal best (Sync skipped)";
-            statusEl.className = "text-[10px] text-slate-400 font-pixel mt-2 text-center";
-        }
-        return; 
-    }
-
-    if (statusEl) {
-        statusEl.innerText = "Syncing score to cloud...";
-        statusEl.className = "text-[10px] text-amber-400 font-pixel mt-2 text-center animate-pulse";
-    }
-
-    try {
-        const res = await fetch(VERCEL_AUTH_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'SUBMIT_SCORE',
-                payload: {
-                    playerName: playerName || 'ANONYMOUS',
-                    score: finalScore
+            // Quota Saver: Skip cloud request if current score does not beat personal local record
+            if (finalScore > localHighScore) {
+                localStorage.setItem('spooky_high_score', finalScore);
+            } else {
+                if (statusEl) {
+                    statusEl.innerText = "Score did not beat personal best (Sync skipped)";
+                    statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
                 }
-            })
-        });
-
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-            if (statusEl) {
-                statusEl.innerText = "Score saved to cloud!";
-                statusEl.className = "text-[10px] text-emerald-400 font-pixel mt-2 text-center";
+                return; 
             }
-            // Invalidate cache so the leaderboard tab displays the newly submitted score
-            globalLeaderboardCache = null;
-        } else {
+
             if (statusEl) {
-                statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
-                statusEl.className = "text-[10px] text-rose-400 font-pixel mt-2 text-center";
+                statusEl.innerText = "Syncing score to cloud...";
+                statusEl.className = "text-[10px] text-amber-400 font-pixel my-1 text-center animate-pulse";
+            }
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'SUBMIT_SCORE',
+                        payload: {
+                            playerName: playerName || 'ANONYMOUS',
+                            score: finalScore,
+                            password: password || ''
+                        }
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    if (statusEl) {
+                        statusEl.innerText = "Score saved to cloud!";
+                        statusEl.className = "text-[10px] text-emerald-400 font-pixel my-1 text-center";
+                    }
+                    globalLeaderboardCache = null;
+                } else {
+                    if (statusEl) {
+                        statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
+                        statusEl.className = "text-[10px] text-rose-400 font-pixel my-1 text-center";
+                    }
+                }
+            } catch (err) {
+                if (statusEl) {
+                    statusEl.innerText = "Offline mode - score saved locally";
+                    statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
+                }
             }
         }
-    } catch (err) {
-        if (statusEl) {
-            statusEl.innerText = "Offline mode - score saved locally";
-            statusEl.className = "text-[10px] text-slate-400 font-pixel mt-2 text-center";
-        }
-    }
-}
+
         function render() {
             ctx.fillStyle = isNight ? '#020617' : '#0f172a';
             ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
@@ -768,7 +770,6 @@
                 }
             });
 
-            /* RESTORED: RENDER PARTICLES (Dust & Smoke Puffs) */
             particles.forEach(p => {
                 ctx.save();
                 ctx.globalAlpha = p.alpha;
@@ -780,96 +781,88 @@
             });
         }
 
+        async function fetchGlobalLeaderboard(forceRefresh = false) {
+            const listEl = document.getElementById('leaderboard-list');
+            const now = Date.now();
 
-
-
-
-
-async function fetchGlobalLeaderboard(forceRefresh = false) {
-    const listEl = document.getElementById('leaderboard-list');
-    const now = Date.now();
-
-    // Use cached data if available and fresh (less than 60s old)
-    if (!forceRefresh && globalLeaderboardCache && (now - lastLeaderboardFetchTime < CACHE_TTL_MS)) {
-        renderLeaderboard(globalLeaderboardCache);
-        return;
-    }
-
-    if (listEl) {
-        listEl.innerHTML = `<div class="text-center py-6 text-slate-400 font-pixel text-xs animate-pulse">Fetching live global scores...</div>`;
-    }
-
-    try {
-        const res = await fetch(VERCEL_AUTH_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'FETCH_ALL' })
-        });
-
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-            let board = [];
-            if (Array.isArray(data.leaderboard)) {
-                board = data.leaderboard;
-            } else if (data.leaderboard && Array.isArray(data.leaderboard.record)) {
-                board = data.leaderboard.record;
-            } else if (Array.isArray(data)) {
-                board = data;
+            if (!forceRefresh && globalLeaderboardCache && (now - lastLeaderboardFetchTime < CACHE_TTL_MS)) {
+                renderLeaderboard(globalLeaderboardCache);
+                return;
             }
 
-            globalLeaderboardCache = board;
-            lastLeaderboardFetchTime = Date.now();
-            renderLeaderboard(board);
-        } else {
-            throw new Error(data.message || "Failed to load");
+            if (listEl) {
+                listEl.innerHTML = `<div class="text-center py-6 text-slate-400 font-pixel text-xs animate-pulse">Fetching live global scores...</div>`;
+            }
+
+            try {
+                const res = await fetch(VERCEL_AUTH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'FETCH_ALL' })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    let board = [];
+                    if (Array.isArray(data.leaderboard)) {
+                        board = data.leaderboard;
+                    } else if (data.leaderboard && Array.isArray(data.leaderboard.record)) {
+                        board = data.leaderboard.record;
+                    } else if (Array.isArray(data)) {
+                        board = data;
+                    }
+
+                    globalLeaderboardCache = board;
+                    lastLeaderboardFetchTime = Date.now();
+                    renderLeaderboard(board);
+                } else {
+                    throw new Error(data.message || "Failed to load");
+                }
+            } catch (err) {
+                if (listEl) {
+                    listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores (${err.message})</div>`;
+                }
+            }
         }
-    } catch (err) {
-        if (listEl) {
-            listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores (${err.message})</div>`;
+
+        function renderLeaderboard(scores) {
+            const listEl = document.getElementById('leaderboard-list');
+            if (!listEl) return;
+
+            if (!scores || !Array.isArray(scores) || scores.length === 0) {
+                listEl.innerHTML = `<div class="text-center py-6 text-slate-400 font-pixel text-xs">No global scores yet!</div>`;
+                return;
+            }
+
+            let html = '';
+            scores.slice(0, 50).forEach((entry, idx) => {
+                const rank = idx + 1;
+                const name = entry.name || entry.username || entry.playerName || 'ANONYMOUS';
+                const score = entry.score !== undefined ? entry.score : (entry.points || 0);
+                const date = entry.date || '';
+
+                html += `
+                    <div class="flex items-center justify-between p-2 rounded bg-slate-800/50 border border-slate-700/50 mb-1 font-pixel text-xs">
+                        <div class="flex items-center space-x-3">
+                            <span class="${rank <= 3 ? 'text-amber-400 font-bold' : 'text-slate-400'}">#${rank}</span>
+                            <span class="text-slate-200">${escapeHtml(name)}</span>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-emerald-400">${score}</span>
+                            <span class="text-[10px] text-slate-500">${date}</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            listEl.innerHTML = html;
         }
-    }
-}
 
-function renderLeaderboard(scores) {
-    const listEl = document.getElementById('leaderboard-list');
-    if (!listEl) return;
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
 
-    if (!scores || scores.length === 0) {
-        listEl.innerHTML = `<div class="text-center py-6 text-slate-400 font-pixel text-xs">No global scores yet!</div>`;
-        return;
-    }
-
-    let html = '';
-    scores.slice(0, 50).forEach((entry, idx) => {
-        const rank = idx + 1;
-        const name = entry.name || entry.username || entry.playerName || 'ANONYMOUS';
-        const score = entry.score || entry.points || 0;
-        const date = entry.date || '';
-
-        html += `
-            <div class="flex items-center justify-between p-2 rounded bg-slate-800/50 border border-slate-700/50 mb-1 font-pixel text-xs">
-                <div class="flex items-center space-x-3">
-                    <span class="${rank <= 3 ? 'text-amber-400 font-bold' : 'text-slate-400'}">#${rank}</span>
-                    <span class="text-slate-200">${escapeHtml(name)}</span>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <span class="text-emerald-400">${score}</span>
-                    <span class="text-[10px] text-slate-500">${date}</span>
-                </div>
-            </div>
-        `;
-    });
-
-    listEl.innerHTML = html;
-}
-
-function escapeHtml(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-
-        
         function openLeaderboard() {
             document.getElementById('leaderboard-modal').classList.remove('hidden');
             fetchGlobalLeaderboard();
@@ -929,17 +922,24 @@ function escapeHtml(str) {
             const listEl = document.getElementById('admin-player-list');
             if (!listEl) return;
 
-            listEl.innerHTML = globalLeaderboardCache.map((item) => {
+            const list = Array.isArray(globalLeaderboardCache) ? globalLeaderboardCache : [];
+
+            if (list.length === 0) {
+                listEl.innerHTML = `<div class="text-slate-500 font-pixel text-[10px] text-center py-2">No active players found</div>`;
+                return;
+            }
+
+            listEl.innerHTML = list.map((item) => {
                 const displayName = item.name || item.username || item.playerName || 'ANONYMOUS';
                 const displayScore = item.score !== undefined ? item.score : (item.points || 0);
 
                 return `
                     <div class="p-2.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
                         <div>
-                            <div class="font-pixel text-[10px] text-purple-300">${displayName}</div>
+                            <div class="font-pixel text-[10px] text-purple-300">${escapeHtml(displayName)}</div>
                             <div class="text-[9px] text-slate-500">Score: ${displayScore}</div>
                         </div>
-                        <button onclick="deletePlayer('${displayName}')" class="px-2 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded font-pixel text-[8px]">
+                        <button onclick="deletePlayer('${escapeHtml(displayName)}')" class="px-2 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded font-pixel text-[8px]">
                             DELETE
                         </button>
                     </div>
@@ -993,7 +993,6 @@ function escapeHtml(str) {
                 alert("Failed to clear leaderboard");
             }
         }
-        
     </script>
 </body>
 </html>
