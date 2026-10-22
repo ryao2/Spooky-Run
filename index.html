@@ -780,9 +780,9 @@
 
 
 
-let globalLeaderboardCache = null;
 let lastLeaderboardFetchTime = 0;
 const CACHE_TTL_MS = 60000; // 60 seconds client cache
+
 
 async function fetchGlobalLeaderboard(forceRefresh = false) {
     const listEl = document.getElementById('leaderboard-list');
