@@ -758,58 +758,35 @@
             });
         }
 
-        async function fetchGlobalLeaderboard() {
-            const listEl = document.getElementById('leaderboard-list');
-            try {
-                const res = await fetch(VERCEL_AUTH_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'FETCH_ALL' })
-                });
+       async function fetchGlobalLeaderboard() {
+    const listEl = document.getElementById('leaderboard-list');
+    try {
+        const res = await fetch(VERCEL_AUTH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'FETCH_ALL' })
+        });
 
-                if (!res.ok) throw new Error("Fetch failed");
-                const data = await res.json();
-                
-                if (data.leaderboard) {
-                    globalLeaderboardCache = data.leaderboard;
-                    renderLeaderboard(data.leaderboard);
-                }
-            } catch (err) {
-                if (listEl) {
-                    listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores</div>`;
-                }
-            }
+        if (!res.ok) throw new Error("Fetch failed");
+        const data = await res.json();
+        
+        let board = [];
+        if (Array.isArray(data.leaderboard)) {
+            board = data.leaderboard;
+        } else if (data.leaderboard && Array.isArray(data.leaderboard.record)) {
+            board = data.leaderboard.record;
+        } else if (Array.isArray(data)) {
+            board = data;
         }
 
-        function renderLeaderboard(board) {
-            const listEl = document.getElementById('leaderboard-list');
-            if (!listEl) return;
-
-            if (!board || board.length === 0) {
-                listEl.innerHTML = `<div class="text-center py-6 text-slate-500 font-pixel text-xs">No global scores yet!</div>`;
-                return;
-            }
-
-            listEl.innerHTML = board.map((item, idx) => {
-                const displayName = item.name || item.username || item.playerName || item.user || 'ANONYMOUS';
-                const displayScore = item.score !== undefined ? item.score : (item.points || item.highScore || 0);
-                const displayDate = item.date || item.created_at || '';
-
-                return `
-                    <div class="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800 text-xs">
-                        <div class="flex items-center space-x-3">
-                            <span class="font-pixel text-[10px] ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600' : 'text-slate-600'}">#${idx + 1}</span>
-                            <span class="font-pixel text-purple-300 text-[10px]">${displayName}</span>
-                        </div>
-                        <div class="flex items-center space-x-3">
-                            <span class="font-pixel text-emerald-400 text-[10px]">${displayScore}</span>
-                            <span class="text-[9px] text-slate-500">${displayDate}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+        globalLeaderboardCache = board;
+        renderLeaderboard(board);
+    } catch (err) {
+        if (listEl) {
+            listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores</div>`;
         }
-
+    }
+}
         function openLeaderboard() {
             document.getElementById('leaderboard-modal').classList.remove('hidden');
             fetchGlobalLeaderboard();
