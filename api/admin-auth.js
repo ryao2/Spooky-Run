@@ -1,23 +1,24 @@
 export default async function handler(req, res) {
+    // CORS Headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
 
     if (req.method === 'OPTIONS') return res.status(200).end();
-    if (req.method !== 'POST') return res.status(405).json({ message: 'Method Not Allowed' });
+    if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method Not Allowed' });
 
     try {
         let body = req.body;
         if (typeof body === 'string') {
             try { body = JSON.parse(body); } catch (e) {
-                return res.status(400).json({ message: 'Invalid JSON body' });
+                return res.status(400).json({ success: false, message: 'Invalid JSON payload' });
             }
         }
 
         const { action, payload, adminPassword } = body || {};
 
         if (!action) {
-            return res.status(400).json({ message: "Missing required 'action' field." });
+            return res.status(400).json({ success: false, message: "Missing required 'action' field." });
         }
 
         const BIN_ID = (process.env.JSONBIN_BIN_ID || '').trim();
@@ -57,13 +58,15 @@ export default async function handler(req, res) {
             leaderboard = rawJson;
         }
 
+        // Action: Fetch All Scores
         if (action === 'FETCH_ALL') {
             return res.status(200).json({ success: true, leaderboard });
         }
 
+        // Action: Submit High Score
         if (action === 'SUBMIT_SCORE') {
             const { playerName, score, password } = payload || {};
-            const name = playerName || body.playerName || "ANONYMOUS";
+            const name = (playerName || body.playerName || "ANONYMOUS").trim();
             const numScore = parseInt(score !== undefined ? score : body.score, 10) || 0;
 
             const existingIdx = leaderboard.findIndex(e => (e.name || e.username || e.playerName) === name);
@@ -83,6 +86,9 @@ export default async function handler(req, res) {
             }
 
             leaderboard.sort((a, b) => (b.score || b.points || 0) - (a.score || a.points || 0));
+
+            // Keep top 100 entries to optimize payload size
+            leaderboard = leaderboard.slice(0, 100);
 
             const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                 method: 'PUT',
@@ -107,8 +113,9 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, leaderboard });
         }
 
+        // Admin Actions Validation
         if (adminPassword !== SERVER_ADMIN_PASS) {
-            return res.status(401).json({ message: 'Unauthorized' });
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
         }
 
         if (action === 'DELETE_PLAYER') {
@@ -133,7 +140,7 @@ export default async function handler(req, res) {
         if (adminUpdateRes.ok) {
             return res.status(200).json({ success: true, leaderboard });
         } else {
-            return res.status(500).json({ message: 'Admin save failed' });
+            return res.status(500).json({ success: false, message: 'Admin save failed' });
         }
 
     } catch (err) {
