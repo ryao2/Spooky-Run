@@ -653,41 +653,61 @@
             saveScoreGlobal(currentUsername, score, currentPassword);
         }
 
-        async function saveScoreGlobal(playerName, playerScore, password) {
-            const statusEl = document.getElementById('sync-status-msg');
-            if (statusEl) statusEl.innerText = "Syncing score to cloud...";
+      async function saveScoreGlobal(playerName, finalScore) {
+    const statusEl = document.getElementById('sync-status');
+    const localHighScore = parseInt(localStorage.getItem('spooky_high_score') || '0', 10);
 
-            try {
-                const res = await fetch(VERCEL_AUTH_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'SUBMIT_SCORE',
-                        payload: {
-                            playerName: playerName,
-                            score: Math.floor(playerScore),
-                            password: password || ''
-                        }
-                    })
-                });
+    // Quota Saver: Skip cloud request if current score does not beat personal local record
+    if (finalScore > localHighScore) {
+        localStorage.setItem('spooky_high_score', finalScore);
+    } else {
+        if (statusEl) {
+            statusEl.innerText = "Score did not beat personal best (Sync skipped)";
+            statusEl.className = "text-[10px] text-slate-400 font-pixel mt-2 text-center";
+        }
+        return; 
+    }
 
-                if (!res.ok) {
-                    if (statusEl) statusEl.innerText = "Sync failed, check proxy";
-                    return;
+    if (statusEl) {
+        statusEl.innerText = "Syncing score to cloud...";
+        statusEl.className = "text-[10px] text-amber-400 font-pixel mt-2 text-center animate-pulse";
+    }
+
+    try {
+        const res = await fetch(VERCEL_AUTH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'SUBMIT_SCORE',
+                payload: {
+                    playerName: playerName || 'ANONYMOUS',
+                    score: finalScore
                 }
+            })
+        });
 
-                const data = await res.json();
-                if (data.success && data.leaderboard) {
-                    globalLeaderboardCache = data.leaderboard;
-                    if (statusEl) statusEl.innerText = "Score saved to cloud!";
-                } else {
-                    if (statusEl) statusEl.innerText = "Sync failed, check proxy";
-                }
-            } catch (err) {
-                if (statusEl) statusEl.innerText = "Sync failed, check proxy";
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            if (statusEl) {
+                statusEl.innerText = "Score saved to cloud!";
+                statusEl.className = "text-[10px] text-emerald-400 font-pixel mt-2 text-center";
+            }
+            // Invalidate cache so the leaderboard tab displays the newly submitted score
+            globalLeaderboardCache = null;
+        } else {
+            if (statusEl) {
+                statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
+                statusEl.className = "text-[10px] text-rose-400 font-pixel mt-2 text-center";
             }
         }
-
+    } catch (err) {
+        if (statusEl) {
+            statusEl.innerText = "Offline mode - score saved locally";
+            statusEl.className = "text-[10px] text-slate-400 font-pixel mt-2 text-center";
+        }
+    }
+}
         function render() {
             ctx.fillStyle = isNight ? '#020617' : '#0f172a';
             ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
@@ -758,8 +778,26 @@
             });
         }
 
-       async function fetchGlobalLeaderboard() {
+       const VERCEL_AUTH_URL = '/api/admin-auth';
+
+let globalLeaderboardCache = null;
+let lastLeaderboardFetchTime = 0;
+const CACHE_TTL_MS = 60000; // 60 seconds client cache
+
+async function fetchGlobalLeaderboard(forceRefresh = false) {
     const listEl = document.getElementById('leaderboard-list');
+    const now = Date.now();
+
+    // Use cached data if available and fresh (less than 60s old)
+    if (!forceRefresh && globalLeaderboardCache && (now - lastLeaderboardFetchTime < CACHE_TTL_MS)) {
+        renderLeaderboard(globalLeaderboardCache);
+        return;
+    }
+
+    if (listEl) {
+        listEl.innerHTML = `<div class="text-center py-6 text-slate-400 font-pixel text-xs animate-pulse">Fetching live global scores...</div>`;
+    }
+
     try {
         const res = await fetch(VERCEL_AUTH_URL, {
             method: 'POST',
@@ -767,26 +805,70 @@
             body: JSON.stringify({ action: 'FETCH_ALL' })
         });
 
-        if (!res.ok) throw new Error("Fetch failed");
         const data = await res.json();
-        
-        let board = [];
-        if (Array.isArray(data.leaderboard)) {
-            board = data.leaderboard;
-        } else if (data.leaderboard && Array.isArray(data.leaderboard.record)) {
-            board = data.leaderboard.record;
-        } else if (Array.isArray(data)) {
-            board = data;
-        }
 
-        globalLeaderboardCache = board;
-        renderLeaderboard(board);
+        if (res.ok && data.success) {
+            let board = [];
+            if (Array.isArray(data.leaderboard)) {
+                board = data.leaderboard;
+            } else if (data.leaderboard && Array.isArray(data.leaderboard.record)) {
+                board = data.leaderboard.record;
+            } else if (Array.isArray(data)) {
+                board = data;
+            }
+
+            globalLeaderboardCache = board;
+            lastLeaderboardFetchTime = Date.now();
+            renderLeaderboard(board);
+        } else {
+            throw new Error(data.message || "Failed to load");
+        }
     } catch (err) {
         if (listEl) {
-            listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores</div>`;
+            listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores (${err.message})</div>`;
         }
     }
 }
+
+function renderLeaderboard(scores) {
+    const listEl = document.getElementById('leaderboard-list');
+    if (!listEl) return;
+
+    if (!scores || scores.length === 0) {
+        listEl.innerHTML = `<div class="text-center py-6 text-slate-400 font-pixel text-xs">No global scores yet!</div>`;
+        return;
+    }
+
+    let html = '';
+    scores.slice(0, 50).forEach((entry, idx) => {
+        const rank = idx + 1;
+        const name = entry.name || entry.username || entry.playerName || 'ANONYMOUS';
+        const score = entry.score || entry.points || 0;
+        const date = entry.date || '';
+
+        html += `
+            <div class="flex items-center justify-between p-2 rounded bg-slate-800/50 border border-slate-700/50 mb-1 font-pixel text-xs">
+                <div class="flex items-center space-x-3">
+                    <span class="${rank <= 3 ? 'text-amber-400 font-bold' : 'text-slate-400'}">#${rank}</span>
+                    <span class="text-slate-200">${escapeHtml(name)}</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span class="text-emerald-400">${score}</span>
+                    <span class="text-[10px] text-slate-500">${date}</span>
+                </div>
+            </div>
+        `;
+    });
+
+    listEl.innerHTML = html;
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+
+        
         function openLeaderboard() {
             document.getElementById('leaderboard-modal').classList.remove('hidden');
             fetchGlobalLeaderboard();
