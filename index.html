@@ -327,15 +327,15 @@
         let clouds = [];
         let stars = [];
 
-        window.onload = () => {
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-            initStars();
-            initClouds();
-            setupControls();
-            fetchGlobalLeaderboard();
-            requestAnimationFrame(gameLoop);
-        };
+      window.onload = () => {
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    initStars();
+    initClouds();
+    setupControls();
+    // fetchGlobalLeaderboard() removed here to save API requests!
+    requestAnimationFrame(gameLoop);
+};
 
         function resizeCanvas() {
             canvas.width = V_WIDTH;
@@ -659,40 +659,23 @@
         async function saveScoreGlobal(playerName, finalScore, password) {
     const statusEl = document.getElementById('sync-status-msg');
     const cleanName = (playerName || 'ANONYMOUS').trim().toUpperCase();
+    if (!cleanName || cleanName === 'ANONYMOUS') return;
+
+    // Account-specific local score key
     const accountKey = `spooky_high_score_${cleanName}`;
-    
-    // Read local high score for THIS specific account
     const localUserScore = parseInt(localStorage.getItem(accountKey) || '0', 10);
-    
-    let existingUserScore = localUserScore;
-    let playerExistsOnCloud = false;
 
-    // Check if player exists in the cached global leaderboard
-    if (Array.isArray(globalLeaderboardCache)) {
-        const cloudEntry = globalLeaderboardCache.find(e => 
-            (e.name || e.username || e.playerName || '').toUpperCase() === cleanName
-        );
-        if (cloudEntry) {
-            playerExistsOnCloud = true;
-            existingUserScore = Math.max(existingUserScore, parseInt(cloudEntry.score || cloudEntry.points || 0, 10));
-        }
-    }
-
-    // Determine if we should sync to JSONBin:
-    // Sync if: Player is NOT on the global leaderboard yet OR current run beats account personal best
-    const isNewAccount = !playerExistsOnCloud;
-    const beatsPersonalBest = finalScore > existingUserScore;
-
-    if (!isNewAccount && !beatsPersonalBest) {
+    // QUOTA SHIELD: Skip API call if this run didn't beat this account's personal best
+    if (localUserScore > 0 && finalScore <= localUserScore) {
         if (statusEl) {
-            statusEl.innerText = "Score did not beat account record (Sync skipped)";
+            statusEl.innerText = "Score did not beat personal best (Sync skipped)";
             statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
         }
         return; 
     }
 
-    // Update local high score for this account
-    const newBest = Math.max(existingUserScore, finalScore);
+    // Save new high score for this account locally first
+    const newBest = Math.max(localUserScore, finalScore);
     localStorage.setItem(accountKey, newBest);
 
     if (statusEl) {
@@ -721,21 +704,10 @@
                 statusEl.innerText = "Score saved to cloud!";
                 statusEl.className = "text-[10px] text-emerald-400 font-pixel my-1 text-center";
             }
-            // Clear cache so opening Global Scores fetches the new entry
-            globalLeaderboardCache = null;
-        } else {
-            if (statusEl) {
-                statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
-                statusEl.className = "text-[10px] text-rose-400 font-pixel my-1 text-center";
-            }
-        }
-    } catch (err) {
-        if (statusEl) {
-            statusEl.innerText = "Offline mode - score saved locally";
-            statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
-        }
-    }
-}
+            // Update cache in memory directly without making an extra fetch call
+            if (Array.isArray(data.leaderboard)) {
+                globalLeaderboardCache = data.leaderboard;
+                lastLeaderboardFetchTime = Date.
 
         function render() {
             ctx.fillStyle = isNight ? '#020617' : '#0f172a';
@@ -807,49 +779,52 @@
         }
 
         async function fetchGlobalLeaderboard(forceRefresh = false) {
-            const listEl = document.getElementById('leaderboard-list');
-            const now = Date.now();
+    const listEl = document.getElementById('leaderboard-list');
+    const now = Date.now();
 
-            if (!forceRefresh && globalLeaderboardCache && (now - lastLeaderboardFetchTime < CACHE_TTL_MS)) {
-                renderLeaderboard(globalLeaderboardCache);
-                return;
-            }
+    // Spam Guard: Disallow force refresh if clicked within 10 seconds
+    if (forceRefresh && (now - lastLeaderboardFetchTime < 10000)) {
+        if (globalLeaderboardCache) renderLeaderboard(globalLeaderboardCache);
+        return;
+    }
 
-            if (listEl) {
-                listEl.innerHTML = `<div class="text-center py-6 text-slate-400 font-pixel text-xs animate-pulse">Fetching live global scores...</div>`;
-            }
+    // Use cached data if available and fresh (60s TTL)
+    if (!forceRefresh && globalLeaderboardCache && (now - lastLeaderboardFetchTime < CACHE_TTL_MS)) {
+        renderLeaderboard(globalLeaderboardCache);
+        return;
+    }
 
-            try {
-                const res = await fetch(VERCEL_AUTH_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'FETCH_ALL' })
-                });
+    if (listEl) {
+        listEl.innerHTML = `<div class="text-center py-6 text-slate-400 font-pixel text-xs animate-pulse">Fetching live global scores...</div>`;
+    }
 
-                const data = await res.json();
+    try {
+        const res = await fetch(VERCEL_AUTH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'FETCH_ALL' })
+        });
 
-                if (res.ok && data.success) {
-                    let board = [];
-                    if (Array.isArray(data.leaderboard)) {
-                        board = data.leaderboard;
-                    } else if (data.leaderboard && Array.isArray(data.leaderboard.record)) {
-                        board = data.leaderboard.record;
-                    } else if (Array.isArray(data)) {
-                        board = data;
-                    }
+        const data = await res.json();
 
-                    globalLeaderboardCache = board;
-                    lastLeaderboardFetchTime = Date.now();
-                    renderLeaderboard(board);
-                } else {
-                    throw new Error(data.message || "Failed to load");
-                }
-            } catch (err) {
-                if (listEl) {
-                    listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores (${err.message})</div>`;
-                }
-            }
+        if (res.ok && data.success) {
+            let board = [];
+            if (Array.isArray(data.leaderboard)) board = data.leaderboard;
+            else if (data.leaderboard && Array.isArray(data.leaderboard.record)) board = data.leaderboard.record;
+            else if (Array.isArray(data)) board = data;
+
+            globalLeaderboardCache = board;
+            lastLeaderboardFetchTime = Date.now();
+            renderLeaderboard(board);
+        } else {
+            throw new Error(data.message || "Failed to load");
         }
+    } catch (err) {
+        if (listEl) {
+            listEl.innerHTML = `<div class="text-center py-6 text-rose-400 font-pixel text-xs">Failed to load live scores</div>`;
+        }
+    }
+}
 
         function renderLeaderboard(scores) {
             const listEl = document.getElementById('leaderboard-list');
