@@ -656,7 +656,7 @@
             saveScoreGlobal(currentUsername, Math.floor(score), currentPassword);
         }
 
-        async function saveScoreGlobal(playerName, finalScore, password) {
+       async function saveScoreGlobal(playerName, finalScore, password) {
     const statusEl = document.getElementById('sync-status-msg');
     const cleanName = (playerName || 'ANONYMOUS').trim().toUpperCase();
     if (!cleanName || cleanName === 'ANONYMOUS') return;
@@ -708,7 +708,7 @@
             if (Array.isArray(data.leaderboard)) {
                 globalLeaderboardCache = data.leaderboard;
                 lastLeaderboardFetchTime = Date.now();
-            
+            }
         } else {
             if (statusEl) {
                 statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
@@ -722,7 +722,6 @@
         }
     }
 }
-
 function render() {
     ctx.fillStyle = isNight ? '#020617' : '#0f172a';
     ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
