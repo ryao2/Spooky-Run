@@ -707,9 +707,23 @@
             // Update cache in memory directly without making an extra fetch call
             if (Array.isArray(data.leaderboard)) {
                 globalLeaderboardCache = data.leaderboard;
-                lastLeaderboardFetchTime = Date.
+                lastLeaderboardFetchTime = Date.now();
             }
-       function render() {
+        } else {
+            if (statusEl) {
+                statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
+                statusEl.className = "text-[10px] text-rose-400 font-pixel my-1 text-center";
+            }
+        }
+    } catch (err) {
+        if (statusEl) {
+            statusEl.innerText = "Offline mode - score saved locally";
+            statusEl.className = "text-[10px] text-slate-400 font-pixel my-1 text-center";
+        }
+    }
+}
+
+function render() {
     ctx.fillStyle = isNight ? '#020617' : '#0f172a';
     ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
 
