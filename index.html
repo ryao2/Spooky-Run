@@ -709,74 +709,74 @@
                 globalLeaderboardCache = data.leaderboard;
                 lastLeaderboardFetchTime = Date.
 
-        function render() {
-            ctx.fillStyle = isNight ? '#020617' : '#0f172a';
-            ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
+       function render() {
+    ctx.fillStyle = isNight ? '#020617' : '#0f172a';
+    ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
 
-            if (dayNightFactor > 0) {
-                ctx.save();
-                ctx.globalAlpha = dayNightFactor;
-                stars.forEach(s => {
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(s.x, s.y, s.size, s.size);
-                });
-                ctx.restore();
-            }
+    if (dayNightFactor > 0) {
+        ctx.save();
+        ctx.globalAlpha = dayNightFactor;
+        stars.forEach(s => {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(s.x, s.y, s.size, s.size);
+        });
+        ctx.restore();
+    }
 
-            ctx.fillStyle = '#1e293b';
-            clouds.forEach(c => {
-                ctx.beginPath();
-                ctx.arc(c.x, c.y, c.width / 3, 0, Math.PI * 2);
-                ctx.fill();
-            });
+    ctx.fillStyle = '#1e293b';
+    clouds.forEach(c => {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.width / 3, 0, Math.PI * 2);
+        ctx.fill();
+    });
 
-            ctx.fillStyle = '#334155';
-            ctx.fillRect(0, GROUND_Y, V_WIDTH, 2);
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(0, GROUND_Y, V_WIDTH, 2);
 
-            ctx.fillStyle = '#a855f7';
-            ctx.font = '10px "Press Start 2P"';
-            ctx.fillText(`SCORE: ${Math.floor(score)}`, V_WIDTH - 150, 30);
+    ctx.fillStyle = '#a855f7';
+    ctx.font = '10px "Press Start 2P"';
+    ctx.fillText(`SCORE: ${Math.floor(score)}`, V_WIDTH - 150, 30);
 
-            if (dino.isJumping) {
-                if (dinoJump.complete && dinoJump.naturalWidth !== 0) {
-                    ctx.drawImage(dinoJump, dino.x, dino.y, dino.width, dino.height);
-                }
-            } else {
-                const currentRunImg = (dino.animFrame === 0) ? dinoRun1 : dinoRun2;
-                if (currentRunImg.complete && currentRunImg.naturalWidth !== 0) {
-                    ctx.drawImage(currentRunImg, dino.x, dino.y, dino.width, dino.height);
-                }
-            }
-
-            obstacles.forEach(obs => {
-                if (obs.type === 'cactus') {
-                    if (cactusImg.complete && cactusImg.naturalWidth !== 0) {
-                        ctx.drawImage(cactusImg, obs.x, obs.y, obs.width, obs.height);
-                    }
-                } else if (obs.type === 'pterodactyl') {
-                    if (pteroImg.complete && pteroImg.naturalWidth !== 0) {
-                        ctx.drawImage(pteroImg, obs.x, obs.y, obs.width, obs.height);
-                    }
-                } else if (obs.type === 'triple-pterodactyl') {
-                    if (pteroImg.complete && pteroImg.naturalWidth !== 0) {
-                        const singleH = obs.height / 3;
-                        ctx.drawImage(pteroImg, obs.x, obs.y, obs.width, singleH);
-                        ctx.drawImage(pteroImg, obs.x, obs.y + singleH, obs.width, singleH);
-                        ctx.drawImage(pteroImg, obs.x, obs.y + (singleH * 2), obs.width, singleH);
-                    }
-                }
-            });
-
-            particles.forEach(p => {
-                ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color || '#ffffff';
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-            });
+    if (dino.isJumping) {
+        if (dinoJump.complete && dinoJump.naturalWidth !== 0) {
+            ctx.drawImage(dinoJump, dino.x, dino.y, dino.width, dino.height);
         }
+    } else {
+        const currentRunImg = (dino.animFrame === 0) ? dinoRun1 : dinoRun2;
+        if (currentRunImg.complete && currentRunImg.naturalWidth !== 0) {
+            ctx.drawImage(currentRunImg, dino.x, dino.y, dino.width, dino.height);
+        }
+    }
+
+    obstacles.forEach(obs => {
+        if (obs.type === 'cactus') {
+            if (cactusImg.complete && cactusImg.naturalWidth !== 0) {
+                ctx.drawImage(cactusImg, obs.x, obs.y, obs.width, obs.height);
+            }
+        } else if (obs.type === 'pterodactyl') {
+            if (pteroImg.complete && pteroImg.naturalWidth !== 0) {
+                ctx.drawImage(pteroImg, obs.x, obs.y, obs.width, obs.height);
+            }
+        } else if (obs.type === 'triple-pterodactyl') {
+            if (pteroImg.complete && pteroImg.naturalWidth !== 0) {
+                const singleH = obs.height / 3;
+                ctx.drawImage(pteroImg, obs.x, obs.y, obs.width, singleH);
+                ctx.drawImage(pteroImg, obs.x, obs.y + singleH, obs.width, singleH);
+                ctx.drawImage(pteroImg, obs.x, obs.y + (singleH * 2), obs.width, singleH);
+            }
+        }
+    });
+
+    particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color || '#ffffff';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
 
         async function fetchGlobalLeaderboard(forceRefresh = false) {
     const listEl = document.getElementById('leaderboard-list');
