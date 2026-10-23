@@ -616,13 +616,13 @@
                 });
             } else if (rand < 0.70) {
                 obstacles.push({
-                    type: 'pterodactyl',
-                    x: V_WIDTH,
-                    y: GROUND_Y - (Math.random() < 0.5 ? 45 : 75),
-                    width: 36,
-                    height: 28,
-                    count: 1
-                });
+                type: 'pterodactyl',
+                x: V_WIDTH,
+                y: GROUND_Y - (Math.random() < 0.5 ? 58 : 85), // <-- FIXED HEIGHTS
+                width: 36,
+                height: 28,
+                count: 1
+               });
             } else {
                 obstacles.push({
                     type: 'triple-pterodactyl',
