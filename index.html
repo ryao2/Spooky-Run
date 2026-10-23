@@ -708,7 +708,7 @@
             if (Array.isArray(data.leaderboard)) {
                 globalLeaderboardCache = data.leaderboard;
                 lastLeaderboardFetchTime = Date.now();
-            }
+            
         } else {
             if (statusEl) {
                 statusEl.innerText = `Sync skipped: ${data.message || 'Server error'}`;
